@@ -37,17 +37,29 @@ case "$cmd" in
     ;;
 
   stop)
+    # server.pid 可能是上一代进程留下的（实测：daemon 重启后 pid 文件还指向老进程，
+    # stop 打一句"未在运行"就走了，端口其实还被占着，新实例 bind 直接 EADDRINUSE）。
+    # 所以 pid 文件不可信时，按端口反查真正的监听者。
+    killed=0
     if [ -f server.pid ]; then
       pid="$(cat server.pid)"
       if kill "$pid" 2>/dev/null; then
         sleep 1
-        echo "[stop] 已停止 pid=$pid"
-      else
-        echo "[stop] pid=$pid 未在运行"
+        echo "[stop] 已停止 pid=$pid（来自 server.pid）"
+        killed=1
       fi
-      rm -f server.pid
-    else
-      echo "[stop] 无 server.pid"
+    fi
+    portpid="$(ss -ltnp 2>/dev/null | grep ":$PORT " | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2)"
+    if [ -n "${portpid:-}" ]; then
+      if kill "$portpid" 2>/dev/null; then
+        sleep 1
+        echo "[stop] 已停止 pid=$portpid（按端口 :$PORT 反查）"
+        killed=1
+      fi
+    fi
+    rm -f server.pid
+    if [ "$killed" = "0" ]; then
+      echo "[stop] 端口 :$PORT 上没有在跑的实例"
     fi
     ;;
 

@@ -5,6 +5,84 @@
 
 ---
 
+## v0.1.4 — 2026-11-04 — 模型迁移平台加 Agent 介入层（两条路线）
+
+### 1. 新增：从没跑通过的模型，由 Agent 介入把流程跑通并出适配包
+
+**行为变化**（运维必须知道）：
+
+| 路线 | 触发条件 | 会不会调大模型 |
+|---|---|---|
+| `replay` 复现包回放 | 命中配方 + 环境指纹一致 + 入口哈希一致 | **不调**（0 次） |
+| `agent` Agent 适配 | 无配方 / 指纹漂移 / 回放失败 | 调，上限 16 轮 |
+
+判定在 `decide_route()`，结果写进 `jobs.route`，页面任务列表有小标签。
+**回放失败会自动升级到 agent**，所以 `route=replay` 但 `result_json.agent_used=true`
+是正常现象——实际路径看 `result_json.path`。
+
+新增文件：
+- `model-platform/agent_bridge.py`（392 行）——LLM 客户端 + JSON 动作解析 + 有界循环
+- `compute-side/_probe/agent_exec.sh`——agent 的 `run_py` 在探针容器内执行的入口
+- `model-platform/tests/`（32 条离线用例）——解析/路线判定/沙箱越界/循环边界
+- `docs/06-agent-design.md`——设计、判定口径、真机实测数据、已知边界
+
+需要配一个 API Key（600 权限）：`<_platform>/agent.key`，或设 `MODEL_AGENT_KEY_FILE`。
+缺 key 时**不会静默降级**：页面会打 warn「Agent 未就绪：缺少 API Key」。
+`GET /api/agent` 查当前生效配置。
+
+### 2. 新增：环境指纹，让复现包知道自己是不是还能用
+
+`env_fingerprint()` = 探针镜像 ID + 驱动 version.info + npu-smi 固件，取 sha256 前 16 位。
+配方归档时一起写进 `recipe.json`。
+
+历史 111 条配方没有指纹 → 先按原样回放一次，成功就补指纹，失败才升级到 agent。
+这样既不会一上来全判 agent 白烧 LLM，也不会继续把「历史配方」当成功承诺。
+
+### 3. 修复：三个让「配方命中 ≠ 能跑」的地基缺陷
+
+1. **探针结论从不回同步**——`probe.sh` 在算力机写 `probe.json`，平台在通算机读本地那份，
+   两者没有同步。实测 `Qwen__Qwen2.5-0.5B-Instruct` 远端 11-04 12:06、本地 10-19 07:52。
+   新迁的模型因此永远进不了复现包清单。→ 新增 `sync_probe_meta()`，产物校验改成回读真实
+   `loaded` 字段，不再用「文件存在」当证据。
+2. **交付包入口从未落位**——`_delivery/*/entry.py` 有 111 个，`<分类>/<org__name>/entry.py`
+   只有 6 个，`probe.sh` 的「专用入口优先」分支基本走了空。→ 新增 `install_replay_entry()`。
+3. **专用入口 `--out` 两种约定**——文件型（GroundVTS）和目录型（Florence-2 等）混用，
+   传错就是 `FileExistsError`/读不到结论。→ `probe.sh` 按入口源码自适应，产物统一回收。
+
+### 4. 修复：交付包可能带旧入口
+
+页面下载的交付包来自本地镜像（rsync 回同步）。原来 rsync 失败被静默吞掉，实测出现过
+本地镜像 `entry.py` 还是 10-19 的 85637 B、而真正跑通的是 agent 改写的 5142 B。
+现在：交付前先把语料目录的入口反推到交付包（不一致会打事件），rsync 失败也打 warn。
+
+### 5. 修复：`start.sh stop` 假停
+
+`server.pid` 过期时 `stop` 只打一句「未在运行」就退出，端口仍被占，新实例 `EADDRINUSE`
+失败、旧代码继续服务（表现为「改了代码没生效」）。现在 pid 失效时按端口反查监听者。
+
+### 6. 前端
+
+- 任务列表加路线小标签 `复现包回放` / `Agent 适配`（按 `agent_used` 判，不看判定值）
+- 详情弹窗加「Agent 介入记录」表格（轮/动作/观察），自渲染样式 + `!important` 折行，
+  抵住网关注入的「表格短列 nowrap」
+- 路线文案对「判定 replay、实际 agent」的任务补「→ 回放失败，已由 Agent 介入」
+
+### 7. 真机实测（910B，卡 4–7；他人卡 0–3 全程未动）
+
+| 模型 | 首次 | 二次 |
+|---|---|---|
+| `Qwen/Qwen2.5-0.5B-Instruct` | `replay`，`agent_turns=0` | — |
+| `microsoft/Florence-2-base` | 回放失败 → `agent` 4 轮跑通，logits `(1,4,51289)` 全有限 | `replay`，指纹一致，不调 agent |
+| `AI-ModelScope/yolo_x_layout` | 回放失败 → `agent` 16 轮，`torch.jit.load` 跑通 | `succeeded / path=replay / agent_turns=0` |
+
+### 8. 仍未做
+
+- 入口型模型的性能测试仍是 `PERF_VERDICT=SKIP`（`perf_test.py` 只认通用路线）
+- 两平台卡互斥仍缺（模型侧进程内 `_CARD_BUSY` vs 算子侧远端 `flock`）
+- 数据切换、旧 8090 收口、Lucky 反代实测 未动
+
+---
+
 ## v0.1.3 — 2026-11-04 — 修两个实测出来的产品缺陷
 
 ### 1. 模型迁移：超过 50 个模型的输入被静默截断（已修）

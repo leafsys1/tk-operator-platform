@@ -411,6 +411,7 @@
         </button>
       </div>
       <div class="logbox" id="modal-logs" aria-live="polite"></div>
+      <div id="modal-agent"></div>
       <div id="modal-deliver"></div>
     </div>
   </div>
@@ -568,17 +569,47 @@
   }
 
   function routeText(route) {
-    return route === 'fast'   ? '① 完整匹配 · 复用已验证方案'
+    return route === 'replay' ? '① 复现包回放 · 命中历史配方，按原样重跑（不调用 Agent）'
+         : route === 'agent'  ? '② Agent 适配 · 无复现包或回放失败，由 Agent 诊断并修复'
+         : route === 'fast'   ? '① 完整匹配 · 复用已验证方案'
          : route === 'family' ? '② 同家族经验 · 参考已有方案'
          : route === 'slow'   ? '③ 首次迁移 · 画像 + NPU 探路'
          : '路径判定中';
   }
 
   function routeShort(route) {
-    return route === 'fast'   ? '① 复用已验证方案'
+    return route === 'replay' ? '① 复现包回放'
+         : route === 'agent'  ? '② Agent 适配'
+         : route === 'fast'   ? '① 复用已验证方案'
          : route === 'family' ? '② 同家族经验'
          : route === 'slow'   ? '③ 首次迁移探路'
          : '路径判定中';
+  }
+
+  /* 任务列表里的路线小标签：让人一眼看出这条到底调没调 Agent。
+     注意：route 只是「跑之前的判定」，回放失败后升级到 Agent 的任务
+     route 仍写着 replay —— 所以以结果里的 agent_used 为准。 */
+  function actualPath(j) {
+    try {
+      const r = JSON.parse((j && j.result_json) || '{}') || {};
+      if (r.agent_used) return 'agent';
+    } catch (e) { /* ignore */ }
+    return (j && j.route) || '';
+  }
+
+  function routeChip(j) {
+    const route = actualPath(j);
+    const base = 'display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;'
+      + 'font-size:11px;line-height:16px;font-weight:400;white-space:nowrap;';
+    if (route === 'agent') {
+      return `<span style="${base}color:#4b3fb0;background:rgba(101,87,210,.12);`
+        + 'border:1px solid rgba(101,87,210,.28)">Agent 适配</span>';
+    }
+    if (route === 'replay') {
+      return `<span style="${base}color:#2f6b57;background:rgba(47,143,104,.10);`
+        + 'border:1px solid rgba(47,143,104,.25)">复现包回放</span>';
+    }
+    return '';
   }
 
   function phaseText(job) {
@@ -877,7 +908,10 @@
       return `<tr class="clickable${cur}" data-job="${esc(j.job_id)}">
         <td><div class="model-cell">
           <span class="model-glyph">${esc(glyph(j.model))}</span>
-          <div><strong>${esc(j.model)}</strong><small class="mono">${esc(j.job_id)}</small></div>
+          <div><strong>${esc(j.model)}</strong>
+            <small class="mono">${esc(j.job_id)}</small>
+            <div>${routeChip(j)}</div>
+          </div>
         </div></td>
         <td>${pill(j.status)}</td>
         <td>${esc(phaseText(j))}</td>
@@ -1022,7 +1056,9 @@
     $('modal-status').textContent = statusMeta(job.status).cn;
     $('modal-phase').textContent = phaseText(job);
     $('modal-progress').textContent = pct + '%';
-    $('modal-route').textContent = routeText(job.route);
+    // 判定是 replay、实际走了 agent 的任务，这里必须说清楚，否则文案会骗人
+    $('modal-route').textContent = routeText(job.route)
+      + (actualPath(job) === 'agent' && job.route !== 'agent' ? ' → 回放失败，已由 Agent 介入' : '');
 
     $('modal-steps').innerHTML = PHASES.map(([k, label], i) => {
       const s = st[k];
@@ -1048,7 +1084,78 @@
       ? evs.map(logLineHTML).join('')
       : '<div class="log-empty">暂无日志</div>';
     $('modal-logs').scrollTop = $('modal-logs').scrollHeight;
+    fillAgent(job);
     $('modal-deliver').innerHTML = job.status === 'succeeded' ? deliverRowHTML(job) : '';
+  }
+
+  /* Agent 介入记录：只在「Agent 适配」这条路线下展示。
+     复现包回放的任务没有 agent 动作，这里直接留空，避免让人误以为每次都调了模型。 */
+  async function fillAgent(job) {
+    const box = $('modal-agent');
+    if (!box) return;
+    box.innerHTML = '';
+    // 不按 route 判断：回放失败后升级到 Agent 的任务，route 仍记着 replay，
+    // 真正的证据是 transcript 里有没有动作。
+    let d = null;
+    try { d = await getJSON('/api/jobs/' + job.job_id + '/agent'); } catch (e) { return; }
+    const rows = (d.transcript || []).filter(x =>
+      x.kind === 'action' || x.kind === 'finish' || x.kind === 'parse_error');
+    if (!rows.length) {
+      box.innerHTML = '<div class="tiny-label" style="margin-top:12px"><span>Agent 介入记录</span>'
+        + '<span class="hint">尚未产生动作</span></div>';
+      return;
+    }
+    const tr = rows.map(r => {
+      if (r.kind === 'finish') {
+        return `<tr><td>${esc(r.turn)}</td><td class="mono">finish</td><td>${
+          r.ok ? '判定已跑通（仍需平台复验）' : '放弃'}</td></tr>`;
+      }
+      if (r.kind === 'parse_error') {
+        return `<tr><td>${esc(r.turn)}</td><td>解析失败</td><td>输出不是合法 JSON，已回灌纠正</td></tr>`;
+      }
+      const obs = String(r.observation || '').replace(/\s+/g, ' ').slice(0, 130);
+      return `<tr><td>${esc(r.turn)}</td><td class="mono">${esc(r.action)}</td>`
+        + `<td>${esc(obs)}</td></tr>`;
+    }).join('');
+    // 不能复用 .logbox：它带 pre/等宽/不折行样式，长文本会把列挤成一字一行。
+    // 这里自带样式 + table-layout:fixed + break-word，长报错也能正常折行。
+    const th = 'padding:6px 8px;text-align:left;font-weight:600;color:#4a4a5a;'
+      + 'background:rgb(247,246,251);border-bottom:1px solid rgba(20,26,46,.10);'
+      + 'white-space:nowrap;font-size:12px';
+    // !important 是必须的：网关注入的统一视觉里有「表格短列 nowrap」规则，
+    // 不加优先级这里的长报错会被截成一行（实测第一次就是被它压住的）。
+    const td = 'padding:6px 8px;vertical-align:top;white-space:normal !important;'
+      + 'word-break:break-word !important;overflow-wrap:anywhere !important;'
+      + 'color:#333;font-size:12px;border-bottom:1px solid rgba(20,26,46,.06)';
+    box.innerHTML = '<div class="tiny-label" style="margin-top:14px">'
+      + `<span>Agent 介入记录</span><span class="hint">共 ${d.turns} 轮动作</span></div>`
+      + '<div style="max-height:230px;overflow:auto;margin-top:6px;'
+      + 'border:1px solid rgba(20,26,46,.10);border-radius:9px;background:#fff">'
+      + '<table style="width:100%;border-collapse:collapse;table-layout:fixed">'
+      + '<colgroup><col style="width:46px"><col style="width:118px"><col></colgroup>'
+      + '<thead><tr>'
+      + `<th style="${th}">轮</th>`
+      + `<th style="${th}">动作</th>`
+      + `<th style="${th}">观察 / 结论</th>`
+      + '</tr></thead><tbody>'
+      + rows.map(r => {
+          let act, obs;
+          if (r.kind === 'finish') {
+            act = 'finish';
+            obs = r.ok ? '判定已跑通（仍需平台复验）' : '放弃';
+          } else if (r.kind === 'parse_error') {
+            act = '解析失败';
+            obs = '输出不是合法 JSON，已回灌纠正';
+          } else {
+            act = r.action;
+            const raw = String(r.observation || '').replace(/\s+/g, ' ');
+            obs = raw.length > 200 ? raw.slice(0, 200) + ' …' : raw;
+          }
+          return `<tr><td style="${td}">${esc(r.turn)}</td>`
+            + `<td style="${td}font-family:ui-monospace,Menlo,Consolas,monospace">${esc(act)}</td>`
+            + `<td style="${td}">${esc(obs)}</td></tr>`;
+        }).join('')
+      + '</tbody></table></div>';
   }
 
   async function openDetail(id) {

@@ -221,6 +221,10 @@ def load_recipes():
                        for x in (p.get("autodeps") or [])],
                        "category": (reg.get(mid) or {}).get("category"),
                        "gb": (reg.get(mid) or {}).get("gb"),
+                       # 复现包的环境指纹与入口哈希：没有它就只能"盲回放"
+                       "fingerprint": p.get("fingerprint") or {},
+                       "entry_sha16": p.get("entry_sha16") or "",
+                       "verified_at": p.get("verified_at") or "",
                        "authoritative": bool(p.get("authoritative"))}
     return ok
 
@@ -784,6 +788,427 @@ def classify_error(err):
     return "未分类", "需人工判读原始 traceback"
 
 
+# ---------------------------------------------------------------- 环境指纹
+# 复现包只在与「当初跑通时」同一套环境里才敢直接回放。
+# 只存 loaded=true 而不存环境，就等于「配方命中 ≠ 现在能跑」——
+# 实测就是这条让语料库里标"已迁移"的模型重跑失败（推理栈一升级全废）。
+_FP = {"ts": 0.0, "data": None}
+FP_TTL = 300
+
+
+def env_fingerprint(force=False):
+    """探针镜像 ID + 驱动/固件版本 -> 一个可比对的指纹。"""
+    now = time.time()
+    if not force and _FP["data"] and now - _FP["ts"] < FP_TTL:
+        return _FP["data"]
+    img = os.environ.get("PROBE_IMG", "model-corpus-probe:v8")
+    cmd = ("docker images --no-trunc --format '{{.ID}}' %s 2>/dev/null | head -1; "
+           "echo '---'; sed -n '1,3p' /usr/local/Ascend/driver/version.info 2>/dev/null; "
+           "echo '---'; npu-smi info -t board -i 0 2>/dev/null "
+           "| grep -iE 'firmware|software' | head -4") % img
+    rc, out = npu(cmd, 90)
+    parts = {"image": img, "image_id": "", "driver": "", "firmware": ""}
+    if rc == 0:
+        chunks = (out or "").split("---")
+        parts["image_id"] = chunks[0].strip().splitlines()[0] if chunks and chunks[0].strip() else ""
+        parts["driver"] = " ".join(x.strip() for x in (chunks[1].splitlines() if len(chunks) > 1 else []) if x.strip())[:200]
+        parts["firmware"] = " ".join(x.strip() for x in (chunks[2].splitlines() if len(chunks) > 2 else []) if x.strip())[:200]
+    import hashlib
+    token = hashlib.sha256(("%s|%s|%s" % (parts["image_id"], parts["driver"],
+                                           parts["firmware"])).encode()).hexdigest()[:16]
+    parts["token"] = token if parts["image_id"] else ""
+    parts["at"] = time.time()
+    _FP["ts"], _FP["data"] = now, parts
+    return parts
+
+
+def _ssh_e():
+    return ("ssh -i %s -p 31236 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "
+            "-o UserKnownHostsFile=%s"
+            % (os.path.expanduser("~/.ssh/KeyPair-fae2027.pem"),
+               os.path.expanduser("~/.ssh/known_hosts")))
+
+
+def _probe_name(mdir):
+    return os.path.basename(str(mdir).rstrip("/"))
+
+
+def sync_probe_meta(mdir, timeout=180):
+    """把远端 _probe/<M>/ 的结论同步回本地镜像。
+
+    这一步原来是缺的：探针在算力机写 probe.json，平台在虚拟机读本地
+    probe.json，两者从不同步。结果是平台永远看旧结论（实测 Qwen2.5
+    远端 11-04 12:06 通过、本地还停在 10-19），新迁的模型也永远进不了
+    复现包清单。返回 (ok, 同步到的文件名列表)。
+    """
+    name = _probe_name(mdir)
+    local = os.path.join(ROOT, "_probe", name)
+    try:
+        os.makedirs(local, exist_ok=True)
+        p = subprocess.run(
+            ["rsync", "-az", "--max-size=8m", "--timeout=60", "-e", _ssh_e(),
+             "root@61.241.77.3:%s/_probe/%s/" % (REMOTE_ROOT, name), local + "/"],
+            capture_output=True, text=True, timeout=timeout)
+        if p.returncode != 0:
+            return False, (p.stderr or "").strip().splitlines()[-1:] or ["rsync rc=%s" % p.returncode]
+        return True, sorted(x for x in os.listdir(local) if os.path.isfile(os.path.join(local, x)))
+    except Exception as e:  # noqa: BLE001
+        return False, ["%s: %s" % (type(e).__name__, str(e)[:120])]
+
+
+def install_replay_entry(mdir, model):
+    """把交付包里的专用入口落位到语料目录，让探针走「专用入口」分支。
+
+    实测：111 个交付包里有 entry.py，语料目录里只有 6 个。entry.py 是当年
+    真正让模型跑通的东西，它没落位，重跑就只能走通用探针再失败一次 ——
+    这就是"配方命中却跑不通"的第二个根源。
+    返回 ("HAVE"|"INSTALLED"|"NONE", entry sha16 或 "")。
+    """
+    name = _probe_name(mdir)
+    pkg = model.replace("/", "-").lower()
+    cmd = ("M='%(mdir)s'; PK='%(root)s/_delivery/%(pkg)s/entry.py'; "
+           "if [ -f \"$M/entry.py\" ]; then S=HAVE; "
+           "elif [ -f \"$PK\" ]; then cp -a \"$PK\" \"$M/entry.py\" && S=INSTALLED; "
+           "else S=NONE; fi; "
+           "echo \"ENTRY=$S\"; sha256sum \"$M/entry.py\" 2>/dev/null | cut -c1-16"
+           % {"mdir": mdir, "root": REMOTE_ROOT, "pkg": pkg})
+    rc, out = npu(cmd, 60)
+    state, sha = "UNKNOWN", ""
+    for line in (out or "").splitlines():
+        line = line.strip()
+        if line.startswith("ENTRY="):
+            state = line.split("=", 1)[1].strip()
+        elif re.fullmatch(r"[0-9a-f]{16}", line):
+            sha = line
+    return state, sha
+
+
+def decide_route(model):
+    """判定这条任务该走「复现包回放」还是「Agent 适配」。
+
+    返回 {"route": "replay"|"agent", "why": str, "fp": {...}, "recipe": {...}}
+    """
+    r = load_recipes().get(model)
+    fp = env_fingerprint()
+    if not r:
+        return {"route": "agent", "recipe": None, "fp": fp,
+                "why": "无复现包：该模型从未在本平台跑通过，走首次探测 + Agent 适配"}
+    rfp = (r.get("fingerprint") or {})
+    if not rfp.get("token"):
+        return {"route": "replay", "recipe": r, "fp": fp, "legacy": True,
+                "why": "命中历史配方（未记录环境指纹）：先按原样回放一次验证，通过后自动补指纹"}
+    if rfp.get("token") != fp.get("token"):
+        return {"route": "agent", "recipe": r, "fp": fp,
+                "why": "复现包环境指纹与当前不一致（配方记录 %s，当前 %s）→ 需重新适配"
+                       % (rfp.get("token"), fp.get("token"))}
+    return {"route": "replay", "recipe": r, "fp": fp,
+            "why": "命中复现包且环境指纹一致：直接回放，不调用 Agent"}
+
+
+# ---------------------------------------------------------------- Agent 配置
+def _agent_key():
+    """按优先级找 API Key：env > _platform/agent.key > 算子平台 secrets（同网关）。"""
+    env = os.environ.get("MODEL_AGENT_KEY")
+    if env:
+        return env.strip()
+    for p in (os.environ.get("MODEL_AGENT_KEY_FILE"),
+              os.path.join(ROOT, "_platform", "agent.key"),
+              "/data/lfx/op-agent-console-20261101/secrets/values/server-active-endpoint.key"):
+        if p and os.path.isfile(p):
+            try:
+                return open(p, encoding="utf-8").read().strip()
+            except Exception:  # noqa: BLE001
+                continue
+    return ""
+
+
+def agent_config():
+    return {
+        "enabled": os.environ.get("MODEL_AGENT_ENABLED", "1") not in ("0", "false", "False"),
+        "base_url": os.environ.get("MODEL_AGENT_BASE_URL", "https://tokens.tiankuan.com/v1"),
+        "model": os.environ.get("MODEL_AGENT_MODEL", "deepseek-v4.1-flash-1017"),
+        "key": _agent_key(),
+        "max_turns": int(os.environ.get("MODEL_AGENT_MAX_TURNS", "16")),
+        "max_wall": float(os.environ.get("MODEL_AGENT_MAX_WALL", "1800")),
+        # 代码类动作很长，1600 tokens 会被截断成非法 JSON（实测连续两轮解析失败）
+        "max_tokens": int(os.environ.get("MODEL_AGENT_MAX_TOKENS", "4000")),
+    }
+
+
+# ---------------------------------------------------------------- Agent 沙箱
+class AgentSandbox(object):
+    """Agent 能做的全部事情。工具 = 白名单，路径 = 锁在模型目录内。
+
+    设计原则：给 agent 真正的动手能力（容器内跑代码、改入口），
+    但不给它改平台、改别的模型、改权重的能力。
+    """
+
+    def __init__(self, cat, mdir, card, job_id, c):
+        self.cat = cat
+        self.mdir = str(mdir).rstrip("/")
+        self.name = _probe_name(mdir)
+        self.card = card
+        self.job_id = job_id
+        self.c = c
+        self.turn = 0
+        self.probe_runs = 0
+        self.last_probe_tail = []
+        self.wrote_entry = False
+
+    # -- 路径与安全 -------------------------------------------
+    def _rel(self, p):
+        p = str(p or ".").strip()
+        if p.startswith("/"):
+            # 允许写绝对路径但必须落在模型目录内
+            if not os.path.normpath(p).startswith(os.path.normpath(self.mdir)):
+                raise ValueError("路径越界（只允许模型目录内）：%s" % p)
+            return os.path.relpath(os.path.normpath(p), self.mdir)
+        r = os.path.normpath(p)
+        if r == ".." or r.startswith("../"):
+            raise ValueError("路径越界（不允许向上）：%s" % p)
+        return r
+
+    def _abs(self, p):
+        r = self._rel(p)
+        return os.path.join(self.mdir, r) if r != "." else self.mdir
+
+    def _emit(self, status, msg):
+        emit(self.c, self.job_id, "adapt", status, "🤖 " + msg)
+
+    # -- 工具 --------------------------------------------------
+    def tool_list_dir(self, path="."):
+        d = self._abs(path)
+        rc, out = npu("find %s -maxdepth 1 -printf '%%f\\t%%y\\t%%s\\n' 2>/dev/null | sort | head -80"
+                      % d, 60)
+        if rc != 0:
+            return {"ok": False, "error": "列目录失败：%s" % (out or "")[:200]}
+        rows = []
+        for line in (out or "").splitlines():
+            parts = line.split("\t")
+            if len(parts) >= 3 and parts[0] not in (".",):
+                rows.append("%s%s  %s B" % (parts[0], "/" if parts[1] == "d" else "",
+                                            parts[2]))
+        return {"ok": True, "path": path, "files": rows}
+
+    def tool_read_text(self, path, max_bytes=12000):
+        f = self._abs(path)
+        n = max(200, min(int(max_bytes or 12000), 60000))
+        rc, out = npu("head -c %d -- %s 2>/dev/null" % (n, f), 60)
+        if rc != 0 or not (out or "").strip():
+            return {"ok": False, "error": "读不到或为空：%s" % path}
+        return {"ok": True, "path": path, "content": out[:n]}
+
+    def tool_write_entry(self, content):
+        content = str(content or "")
+        if len(content) > 200000:
+            return {"ok": False, "error": "入口文件过大（%d 字节）" % len(content)}
+        try:
+            compile(content, "entry.py", "exec")
+        except SyntaxError as e:
+            return {"ok": False, "error": "Python 语法错误（第 %s 行）：%s"
+                    % (e.lineno, e.msg)}
+        import base64
+        b64 = base64.b64encode(content.encode("utf-8")).decode()
+        target = os.path.join(self.mdir, "entry.py")
+        cmd = ("T='%s'; [ -f \"$T\" ] && cp -a \"$T\" \"$T.bak-$(date +%%Y%%m%%d-%%H%%M%%S)\"; "
+               "echo '%s' | base64 -d > \"$T.tmp\" && mv \"$T.tmp\" \"$T\" && "
+               "python3 -m py_compile \"$T\" && echo WROTE_OK && sha256sum \"$T\" | cut -c1-16"
+               % (target, b64))
+        rc, out = npu(cmd, 120)
+        if "WROTE_OK" not in (out or ""):
+            return {"ok": False, "error": "写入失败：%s" % (out or "")[-300:]}
+        self.wrote_entry = True
+        sha = ""
+        for line in (out or "").splitlines():
+            if re.fullmatch(r"[0-9a-f]{16}", line.strip()):
+                sha = line.strip()
+        self._emit("ok", "已写入专用入口 entry.py（%d 字节，sha %s）" % (len(content), sha))
+        return {"ok": True, "bytes": len(content), "sha256_16": sha,
+                "note": "已写入。用 run_probe 复验；判定只认 VERDICT=LOAD-OK。"}
+
+    def tool_patch_json(self, path, patch):
+        if not isinstance(patch, dict) or not patch:
+            return {"ok": False, "error": "patch 必须是非空对象"}
+        import base64
+        f = self._abs(path)
+        b64 = base64.b64encode(json.dumps(patch, ensure_ascii=False).encode()).decode()
+        py = (
+            "import base64,json,os,shutil,sys\n"
+            "f=sys.argv[1]\n"
+            "patch=json.loads(base64.b64decode(sys.argv[2]).decode())\n"
+            "shutil.copy2(f, f+'.bak')\n"
+            "d=json.load(open(f,encoding='utf-8'))\n"
+            "d.update(patch)\n"
+            "json.dump(d, open(f,'w',encoding='utf-8'), ensure_ascii=False, indent=2)\n"
+            "print('PATCHED', list(patch.keys()))\n")
+        b64py = base64.b64encode(py.encode()).decode()
+        cmd = ("echo '%s' | base64 -d > /tmp/_pj.py && python3 /tmp/_pj.py '%s' '%s'"
+               % (b64py, f, b64))
+        rc, out = npu(cmd, 60)
+        if "PATCHED" not in (out or ""):
+            return {"ok": False, "error": "改 json 失败：%s" % (out or "")[-260:]}
+        return {"ok": True, "result": (out or "").strip()[:200]}
+
+    def tool_run_py(self, code, timeout=300):
+        code = str(code or "")
+        if not code.strip():
+            return {"ok": False, "error": "code 为空"}
+        if len(code) > 40000:
+            return {"ok": False, "error": "单次代码过长（>40KB）"}
+        bad = re.search(r"\b(rm\s+-rf\s+/|shutil\.rmtree\(\s*['\"]/"
+                        r"|os\.system\(\s*['\"]rm)", code)
+        if bad:
+            return {"ok": False, "error": "拒绝执行：疑似破坏性命令（%s）" % bad.group(0)[:40]}
+        import base64
+        self.turn += 1
+        fn = "turn_%02d.py" % self.turn
+        b64 = base64.b64encode(code.encode("utf-8")).decode()
+        cmd = ("D='%s/_probe/%s/_agent'; mkdir -p \"$D\"; "
+               "echo '%s' | base64 -d > \"$D/%s\"; echo SCRIPT_OK"
+               % (REMOTE_ROOT, self.name, b64, fn))
+        rc, out = npu(cmd, 60)
+        if "SCRIPT_OK" not in (out or ""):
+            return {"ok": False, "error": "下发脚本失败：%s" % (out or "")[-200:]}
+        rc2, out2 = npu("cd %s/_probe && bash agent_exec.sh %s %s %d %s"
+                        % (REMOTE_ROOT, self.cat, self.name, self.card, fn),
+                        max(60, min(int(timeout or 300), 600)))
+        txt = out2 or ""
+        if rc2 == 124:
+            return {"ok": True, "timeout": True, "stdout_tail": txt[-2500:] or "（超时且无输出）"}
+        return {"ok": True, "stdout_tail": txt[-3500:]}
+
+    def tool_run_probe(self):
+        self.probe_runs += 1
+        ok, err, tail = _run_probe(self.job_id, self.c, self.cat, self.mdir, self.card)
+        self.last_probe_tail = tail
+        return {"ok": True, "passed": bool(ok), "error": (err or "")[:400],
+                "stdout_tail": "\n".join(tail[-45:])}
+
+
+# ---------------------------------------------------------------- Agent 入口
+def run_agent(job_id, c, model, cat, mdir, card, decision, first_tail, first_err):
+    """让 agent 上手；返回 dict（含 ok / transcript 路径 / 结论）。
+
+    注意：agent 自己说 ok 不算数，调用方必须再用 _run_probe 复验一次。
+    """
+    import agent_bridge
+    cfg = agent_config()
+    if not cfg["enabled"]:
+        return {"ok": False, "skipped": True,
+                "summary": "Agent 已被 MODEL_AGENT_ENABLED=0 关闭", "transcript": None}
+    client = agent_bridge.LlmClient(cfg["base_url"], cfg["key"], cfg["model"],
+                                 max_tokens=cfg.get("max_tokens", 4000))
+    if not client.available():
+        emit(c, job_id, "adapt", "warn",
+             "Agent 未就绪：缺少 API Key（%s）—— 本条只能按普通失败处理"
+             % ("已禁用" if not cfg["enabled"] else "找不到 key"))
+        return {"ok": False, "skipped": True,
+                "summary": "Agent 未配置 API Key", "transcript": None}
+
+    box = AgentSandbox(cat, mdir, card, job_id, c)
+    loop = agent_bridge.AgentLoop(
+        client, box,
+        emit=lambda ph, st, msg: emit(c, job_id, ph, st, msg),
+        log=lambda m: emit(c, job_id, "adapt", "running", m[:400]) if False else None,
+        max_turns=cfg["max_turns"], max_wall=cfg["max_wall"])
+
+    emit(c, job_id, "adapt", "running",
+         "Agent 介入：模型 %s（%s 类），模型目录 %s" % (model, cat, mdir))
+    if decision.get("recipe") is None:
+        emit(c, job_id, "adapt", "running",
+             "介入原因：%s" % decision.get("why"))
+    else:
+        emit(c, job_id, "adapt", "running", "介入原因：%s" % decision.get("why"))
+
+    brief = build_agent_brief(model, cat, mdir, decision, first_tail, first_err, box)
+    res = loop.run(brief)
+    tp = os.path.join(ROOT, "_probe", _probe_name(mdir), "agent.jsonl")
+    loop.dump_jsonl(tp)
+    res["transcript"] = tp if os.path.isfile(tp) else None
+    res["sandbox"] = {"probe_runs": box.probe_runs, "wrote_entry": box.wrote_entry}
+    return res
+
+
+def build_agent_brief(model, cat, mdir, decision, first_tail, first_err, box):
+    """把「现场证据」一次性交给 agent：目录、配置、上次输出、坑库、已有入口。"""
+    pf = profile_model(mdir)
+    lines = [
+        "## 任务",
+        "模型：%s" % model,
+        "分类：%s" % cat,
+        "模型目录：%s（容器内挂载为 /workspace/model，只读）" % mdir,
+        "目标：让 run_probe 打印 VERDICT=LOAD-OK —— 即模型在 NPU 上真的加载 + 跑通一次前向。",
+        "",
+        "## 路线判定",
+        decision.get("why") or "",
+        "",
+        "## 目录画像",
+        "文件数 %s；标准配置 %s；架构 %s；权重文件 %s 个"
+        % (pf.get("files"), "/".join(pf.get("configs") or ["无"]) or "无",
+           pf.get("arch") or "未知", pf.get("weights")),
+    ]
+    cfg = None
+    for fn in ("config.json", "configuration.json"):
+        try:
+            p = os.path.join(mdir, fn)
+            if mdir.startswith(REMOTE_ROOT):
+                rc, out = npu("head -c 3000 -- '%s'" % p, 45)
+                if rc == 0 and out.strip():
+                    cfg = (fn, out[:3000])
+                    break
+            elif os.path.isfile(p):
+                cfg = (fn, open(p, encoding="utf-8", errors="replace").read()[:3000])
+                break
+        except Exception:  # noqa: BLE001
+            continue
+    if cfg:
+        lines += ["", "## %s（截断）" % cfg[0], "```json", cfg[1], "```"]
+
+    ent = os.path.join(mdir, "entry.py")
+    ent_txt = ""
+    if os.path.isfile(ent):
+        ent_txt = open(ent, encoding="utf-8", errors="replace").read()[:7000]
+    elif mdir.startswith(REMOTE_ROOT):
+        rc, out = npu("head -c 7000 -- '%s'" % ent, 45)
+        if rc == 0 and out.strip():
+            ent_txt = out
+    if ent_txt:
+        lines += ["", "## 已有专用入口 entry.py（%d 字节，这是你的起点，可改）" % len(ent_txt),
+                  "```python", ent_txt, "```"]
+    else:
+        lines += ["", "## 无专用入口（将走通用探针）"]
+
+    if first_tail:
+        lines += ["", "## 上次探针输出（末尾 40 行）", "```",
+                  "\n".join(first_tail[-40:])[:5000], "```"]
+    if first_err:
+        bucket, advice = classify_error(first_err)
+        lines += ["", "## 报错", first_err[:600], "",
+                  "分桶：%s；建议方向：%s" % (bucket, advice)]
+        hits = diagnose(first_err, 2)
+        if hits:
+            lines += ["", "## 坑库命中"]
+            for i, h in enumerate(hits, 1):
+                lines.append("%d. [%s桶] %s → %s" % (i, h["bucket"], h["symptom"][:90],
+                                                    (h["direction"] or "")[:160]))
+    lines += ["", "现在开始。第一步先看证据，不要急着写 entry.py。", ""]
+    lines += [
+        "## 平台约定（重要，别重复踩）",
+        "· 容器内 PYTHONPATH 已含 /workspace/probe，可直接 `import npu_shim` 并 "
+        "`npu_shim.apply_all()` —— 它会补齐 7 类兼容补丁（verify_device 接受 npu、"
+        "torch.cuda.* 重定向、config 缺的生成参数、transformers 新版属性、torchaudio 旧 API 等）。"
+        "探针自己也会打这些补丁，所以你写的 entry.py 也应当先 apply，否则 run_py 里手动验证"
+        "会出现 probe 里本来没有的报错。",
+        "· run_py 单次可接受最长 40KB 代码，正常写即可，不必为了短而拆碎。",
+        "· run_py 是独立进程，模型每轮都要重新 from_pretrained；大模型加载慢，优先用一次脚本"
+        "把「验证 + 打印结论」做完。",
+        "· 写 entry.py 时：--out 传进来的值是 `/workspace/out/entry_result.json`，"
+        "两种写法平台都支持（直接当文件写，或当目录用并在其下写 entry_result.json，"
+        "平台会自动拍平）；最后必须打印 VERDICT=LOAD-OK / VERDICT=LOAD-FAIL。",
+    ]
+    return "\n".join(lines)
+
+
 def profile_model(mdir):
     """画像：读配置，说明这是什么模型（对应 model-profile skill）。
 
@@ -851,9 +1276,178 @@ STAGE_RULES = [
 ]
 
 
+def _run_probe(job_id, c, cat, mdir, card):
+    """跑一次探针（专用入口优先），把过程按阶段规则推给前端。
+
+    返回 (ok, err, tail_lines)。ok 只认 stdout 里的 VERDICT=LOAD-OK ——
+    这是容器里真的跑完一次加载+前向才打印的那一行。
+    """
+    remote_cmd = ("cd %s/_probe && PROBE_ROUTE_TIMEOUT=%s bash probe.sh %s %s %d"
+                  % (REMOTE_ROOT, os.environ.get("PROBE_ROUTE_TIMEOUT", "240"),
+                     cat, _probe_name(mdir), card))
+    p = subprocess.Popen(["bash", _npu_sh(), remote_cmd],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         text=True, errors="replace", start_new_session=True)
+    verdict, err, tail = None, None, []
+    emitted = set()
+    for line in p.stdout:
+        line = line.rstrip("\n")
+        if line.strip():
+            tail.append(line)
+            if len(tail) > 60:
+                tail.pop(0)
+        for rx, (ph, st, msg) in STAGE_RULES:
+            if rx.search(line) and msg not in emitted:
+                emitted.add(msg)
+                emit(c, job_id, ph, st, msg)
+        if "VERDICT=" in line:
+            verdict = "LOAD-OK" in line
+        if line.startswith("ERROR:"):
+            err = line[6:].strip()[:300]
+    p.wait(timeout=60)
+    return bool(verdict), err, tail
+
+
+def _persist_recipe(job_id, c, model, cat, mdir, agent_res, entry_state, entry_sha):
+    """跑通后写复现包：把「怎么跑通的」和「当时的环境」一起记下来。
+
+    只记 loaded=true 不记环境，就是之前那条 known-issue：配方命中 ≠ 现在能跑。
+    """
+    import base64
+    name = _probe_name(mdir)
+    fp = env_fingerprint()
+    payload = {
+        "model": model, "category": cat,
+        "fingerprint": fp,
+        "entry_state": entry_state, "entry_sha16": entry_sha,
+        "verified_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "verified_by_job": job_id,
+        "agent": ({"used": True, "turns": (agent_res or {}).get("turns"),
+                   "root_cause": ((agent_res or {}).get("root_cause") or "")[:300],
+                   "fix": ((agent_res or {}).get("fix") or "")[:600],
+                   "llm": (agent_res or {}).get("llm")}
+                  if agent_res and agent_res.get("ok") else {"used": False}),
+    }
+    py = (
+        "import base64,json,os,sys\n"
+        "d=sys.argv[1]\n"
+        "p=json.loads(base64.b64decode(sys.argv[2]).decode())\n"
+        "pj=os.path.join(d,'probe.json')\n"
+        "cur={}\n"
+        "if os.path.isfile(pj):\n"
+        "    try: cur=json.load(open(pj,encoding='utf-8'))\n"
+        "    except Exception: cur={}\n"
+        "out=dict(cur)\n"
+        "for k,v in p.items():\n"
+        "    if v is not None: out[k]=v\n"
+        "out['loaded']=bool(cur.get('loaded'))\n"
+        "if not out.get('model'): out['model']=p.get('model')\n"
+        "json.dump(out, open(os.path.join(d,'recipe.json'),'w',encoding='utf-8'),\n"
+        "          ensure_ascii=False, indent=2)\n"
+        "print('RECIPE_OK loaded=%s route=%s' % (out.get('loaded'), out.get('route')))\n")
+    b64py = base64.b64encode(py.encode()).decode()
+    b64p = base64.b64encode(json.dumps(payload, ensure_ascii=False).encode()).decode()
+    d_remote = "%s/_probe/%s" % (REMOTE_ROOT, name)
+    rc, out = npu("echo '%s' | base64 -d > /tmp/_rc.py && python3 /tmp/_rc.py '%s' '%s'"
+                  % (b64py, d_remote, b64p), 90)
+    ok = "RECIPE_OK" in (out or "")
+    ok_sync, files = sync_probe_meta(mdir)
+    if ok:
+        emit(c, job_id, "deliver", "ok",
+             "复现包已归档：环境指纹 %s，入口 %s，结论已回同步本地镜像"
+             % (fp.get("token") or "未取到",
+                ("entry.py sha %s" % entry_sha) if entry_sha else "通用探针"))
+    else:
+        emit(c, job_id, "deliver", "warn",
+             "复现包写入失败：%s" % (out or "")[-160:].replace("\n", " "))
+    if not ok_sync:
+        emit(c, job_id, "deliver", "warn",
+             "探针结论回同步失败：%s（平台可能仍读旧结论）" % (files[-1] if files else ""))
+    return ok
+
+
+def _append_adaptation(model, agent_res, err):
+    """把 agent 这次的「现象→根因→修法」沉淀进适配库，下次同家族直接可参考。"""
+    p = os.path.join(ROOT, "_manifest", "adaptations.json")
+    try:
+        d = {"items": []}
+        if os.path.isfile(p):
+            d = json.load(open(p, encoding="utf-8")) or {"items": []}
+        items = [x for x in (d.get("items") or []) if x.get("model") != model]
+        bucket, _ = classify_error((agent_res or {}).get("root_cause") or err or "")
+        items.append({
+            "model": model, "source": "agent", "n_steps": 1, "n_auto": 1,
+            "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "steps": [{"bucket": (bucket or "未分类").split(" ")[0],
+                       "symptom": ((agent_res or {}).get("root_cause") or err or "")[:160],
+                       "fix": ((agent_res or {}).get("fix") or "")[:220]}],
+        })
+        d["items"] = items
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _write_agent_report(mdir, model, pkg, agent_res):
+    """把 Agent 介入过程写进交付包，作为可审计证据（不是"我们修好了"的一句话）。"""
+    import base64
+    name = _probe_name(mdir)
+    tp = os.path.join(ROOT, "_probe", name, "agent.jsonl")
+    rows = []
+    if os.path.isfile(tp):
+        for line in open(tp, encoding="utf-8"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rows.append(json.loads(line))
+            except Exception:  # noqa: BLE001
+                pass
+    L = ["# Agent 介入记录", "",
+         "- 模型：`%s`" % model,
+         "- 生成时间：%s" % time.strftime("%Y-%m-%d %H:%M:%S"),
+         "- 轮数：%s" % (agent_res or {}).get("turns"),
+         "- 停止原因：%s" % (agent_res or {}).get("stop_reason"),
+         "- 结论：%s" % ((agent_res or {}).get("summary") or "")[:400],
+         "", "## 根因与修法", "",
+         "- 根因：%s" % (((agent_res or {}).get("root_cause") or "未给出")[:400]),
+         "- 修法：%s" % (((agent_res or {}).get("fix") or "未给出")[:600]),
+         "", "## 逐轮动作", "", "| 轮 | 动作 | 结果 |", "|---|---|---|"]
+    for r in rows:
+        if r.get("kind") == "action":
+            obs = str(r.get("observation") or "").replace("|", "/").replace("\n", " ")[:150]
+            L.append("| %s | `%s` | %s |" % (r.get("turn"), r.get("action"), obs))
+        elif r.get("kind") == "finish":
+            L.append("| %s | `finish` | ok=%s |" % (r.get("turn"), r.get("ok")))
+    llm = (agent_res or {}).get("llm") or {}
+    L += ["", "## 模型调用用量", "",
+          "- 调用次数 %s；prompt %s tokens；completion %s tokens；总耗时 %ss"
+          % (llm.get("calls"), llm.get("prompt_tokens"), llm.get("completion_tokens"),
+             llm.get("elapsed_s")),
+          "", "> 判定口径：本包只有在 `run_probe` 复验出现 `VERDICT=LOAD-OK` 后才会生成；",
+          "> agent 自述的成功不作为通过依据。", ""]
+    text = "\n".join(L)
+    b64 = base64.b64encode(text.encode("utf-8")).decode()
+    rp = "%s/_delivery/%s" % (REMOTE_ROOT, pkg)
+    npu("D='%s'; if [ -d \"$D\" ]; then echo '%s' | base64 -d > \"$D/AGENT_REPORT.md\" && echo WROTE; "
+        "else echo NODIR; fi" % (rp, b64), 90)
+    lp = os.path.join(ROOT, "_delivery", pkg)
+    try:
+        os.makedirs(lp, exist_ok=True)
+        open(os.path.join(lp, "AGENT_REPORT.md"), "w", encoding="utf-8").write(text)
+    except Exception:  # noqa: BLE001
+        pass
+    return text
+
+
 def run_migration(job_id, model):
     c = db()
     _card = None
+    decision = None
+    agent_res = None
+    entry_state, entry_sha = "", ""
     try:
         c.execute("UPDATE jobs SET status='running', phase='resolve', started_at=? WHERE job_id=?",
                   (time.time(), job_id))
@@ -861,11 +1455,8 @@ def run_migration(job_id, model):
 
         cat, mdir = find_corpus_dir(model)
         if not mdir:
-            # 语料库里没有 -> 自动从魔搭拉取（客户输入即迁移的关键一环）
             cat, mdir = download_model(model, job_id, c)
             if not mdir:
-                # 体积超限时 enforce_size_limit 已经写好具体原因，
-                # 这里不能再用笼统的"下载失败"把它盖掉。
                 row = c.execute("SELECT status, error FROM jobs WHERE job_id=?",
                                 (job_id,)).fetchone()
                 if not (row and row["status"] == "failed" and (row["error"] or "").strip()):
@@ -874,46 +1465,50 @@ def run_migration(job_id, model):
                               (time.time(), "模型下载失败或不存在", job_id))
                 return
 
-        recipes = load_recipes()
-        hit = model in recipes
-        c.execute("UPDATE jobs SET route=? WHERE job_id=?", ("fast" if hit else "slow", job_id))
-        if hit:
-            r = recipes[model]
+        # ---- ① 复现包落位：交付包里的入口装回语料目录 ----
+        # probe.sh 优先用 $MDIR/entry.py。实测 111 个交付包有入口、语料目录只有 6 个，
+        # 入口没落位，重跑就只能再走通用探针再失败一次。
+        entry_state, entry_sha = install_replay_entry(mdir, model)
+        if entry_state == "INSTALLED":
             emit(c, job_id, "match_recipe", "ok",
-                 "命中已验证配方：加载路线 %s，依赖 %s，历史耗时 %ss"
-                 % (r.get("route"), ",".join(r.get("autodeps") or []) or "无", r.get("elapsed_s")))
-            # 该模型当初是靠这些修复才跑通的 —— 展示给客户，说明"经验"具体是什么
+                 "复现包落位：已把交付包里的专用入口 entry.py 装回语料目录（sha %s）"
+                 % entry_sha)
+
+        # ---- ② 路线判定 ----
+        decision = decide_route(model)
+        route = decision["route"]
+        c.execute("UPDATE jobs SET route=? WHERE job_id=?", (route, job_id))
+        r = decision.get("recipe")
+        if route == "replay":
+            emit(c, job_id, "match_recipe", "ok", "路线：复现包回放 —— %s" % decision["why"])
+            if r:
+                emit(c, job_id, "match_recipe", "ok",
+                     "配方：加载路线 %s；依赖 %s；历史耗时 %ss"
+                     % (r.get("route"), ",".join(r.get("autodeps") or []) or "无",
+                        r.get("elapsed_s")))
             ad = load_adaptations().get(model)
             if ad:
                 emit(c, job_id, "adapt", "ok",
-                     "该配方含 %d 步已沉淀修复（%d 步已自动化），本次直接复用，无需重做"
-                     % (ad["n_steps"], ad.get("n_auto", 0)))
-                for i, st in enumerate(ad["steps"], 1):
+                     "该配方含 %d 步已沉淀修复（其中 %d 步已自动化），本次直接复用"
+                     % (ad.get("n_steps", 0), ad.get("n_auto", 0)))
+                for i, st in enumerate(ad.get("steps") or [], 1):
                     emit(c, job_id, "adapt", "ok",
-                         "  历史修复 %d/%d [%s桶] %s → %s" % (
-                             i, ad["n_steps"], st["bucket"],
-                             st["symptom"][:42], st["fix"][:70]))
+                         "  历史修复 %d/%d [%s桶] %s → %s"
+                         % (i, ad.get("n_steps", 0), st.get("bucket", "?"),
+                            (st.get("symptom") or "")[:42], (st.get("fix") or "")[:70]))
         else:
-            emit(c, job_id, "match_recipe", "running",
-                 "无已验证配方 → 走逐步迁移（画像→探路→分类→定位→适配→验证→交付）")
+            emit(c, job_id, "match_recipe", "warn", "路线：Agent 适配 —— %s" % decision["why"])
             pf = profile_model(mdir)
             emit(c, job_id, "match_recipe", "ok",
                  "画像：%d 个文件 / %s；架构=%s；权重文件 %d 个"
                  % (pf["files"], "/".join(pf.get("configs") or ["无标准配置"]),
                     pf.get("arch") or "未知", pf["weights"]))
-            # 有已知适配记录 -> 把「已沉淀的修复步骤」逐步展示出来
             ad = load_adaptations().get(model)
             if ad:
                 emit(c, job_id, "adapt", "running",
-                     "命中已沉淀的适配方案（%d 步，其中 %d 步已自动化）"
-                     % (ad["n_steps"], ad.get("n_auto", 0)))
-                for i, st in enumerate(ad["steps"], 1):
-                    emit(c, job_id, "adapt", "ok",
-                         "修复 %d/%d [%s桶]%s → %s" % (
-                             i, ad["n_steps"], st["bucket"],
-                             st["symptom"][:46], st["fix"][:78]))
+                     "命中已沉淀的适配方案（%d 步，其中 %d 步已自动化），供 Agent 参考"
+                     % (ad.get("n_steps", 0), ad.get("n_auto", 0)))
 
-        # 已在库的模型：量大时也给出提示（只提示不拦，因为可能已分片优化过）
         _gb = dir_size_gb(mdir) if mdir.startswith(REMOTE_ROOT) else None
         if _gb is not None and _gb > MAX_MODEL_GB:
             emit(c, job_id, "prepare_env", "warn",
@@ -923,56 +1518,79 @@ def run_migration(job_id, model):
              "语料目录 %s（%s 类）%s"
              % (mdir, CAT_CN.get(cat, cat),
                 ("，%.1f GB" % _gb) if _gb is not None else ""))
-        emit(c, job_id, "adapt", "running", "在算力服务器上启动 NPU 适配与加载…")
 
-        # probe 必须在算力服务器上跑：docker + NPU 都在那边，权重也在那边。
-        # 排队拿卡：有空卡立刻跑，没空卡进入 queued，等前面任务释放后自动开始
         card = _card = wait_for_card(job_id, c, model)
         emit(c, job_id, "prepare_env", "ok", "已分配 NPU 卡 %d（共 8 张，独占使用）" % card)
-        remote_cmd = ("cd %s/_probe && PROBE_ROUTE_TIMEOUT=%s bash probe.sh %s %s %d"
-                      % (REMOTE_ROOT,
-                         os.environ.get("PROBE_ROUTE_TIMEOUT", "240"),
-                         cat, os.path.basename(mdir), card))
-        p = subprocess.Popen(["bash", _npu_sh(), remote_cmd],
-                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                             text=True, errors="replace",
-                             start_new_session=True)
-        verdict, err = None, None
-        tail = []
-        emitted = set()          # 去重：同一条规则只推一次，避免刷屏
-        for line in p.stdout:
-            line = line.rstrip("\n")
-            if line.strip():
-                tail.append(line)
-                if len(tail) > 30:
-                    tail.pop(0)
-            for rx, (ph, st, msg) in STAGE_RULES:
-                if rx.search(line) and msg not in emitted:
-                    emitted.add(msg)
-                    emit(c, job_id, ph, st, msg)
-            if "VERDICT=" in line:
-                verdict = "LOAD-OK" in line
-            if line.startswith("ERROR:"):
-                err = line[6:].strip()[:300]
-        p.wait(timeout=30)
-        rc = p.returncode
-        # 注意：这里**不能**释放卡。
-        # deliver 阶段还要用同一张卡跑性能测试；释放后可能被别的任务抢走，
-        # 导致 perf 跑到一半设备被占。卡统一在 finally 里释放。
+        emit(c, job_id, "adapt", "running", "在算力服务器上启动 NPU 适配与加载…")
 
-        if verdict:
+        # ---- ③ 第一次执行：回放（或首次探测） ----
+        ok, err, tail = _run_probe(job_id, c, cat, mdir, card)
+        if ok:
+            emit(c, job_id, "adapt", "ok",
+                 "复现包回放成功（全程未调用 Agent）" if route == "replay"
+                 else "首次探测直接通过（未需要 Agent 介入）")
+        else:
+            # ---- ④ 失败 -> Agent 介入 ----
+            if route == "replay":
+                emit(c, job_id, "adapt", "warn",
+                     "复现包回放失败（环境或入口已变化）→ 升级到 Agent 适配")
+            else:
+                emit(c, job_id, "adapt", "warn",
+                     "首次探测未通过 → Agent 接手（%s）" % (err or "见上方日志")[:120])
+            agent_res = run_agent(job_id, c, model, cat, mdir, card, decision, tail, err)
+            if agent_res.get("skipped"):
+                emit(c, job_id, "adapt", "warn",
+                     "Agent 未启用，本条按普通失败处理：%s" % agent_res.get("summary"))
+            else:
+                # agent 自述的成功不算数：平台自己再跑一遍，只认 VERDICT=LOAD-OK
+                emit(c, job_id, "adapt", "running", "Agent 收工，平台复验（只认容器返回的 VERDICT）")
+                ok2, err2, tail2 = _run_probe(job_id, c, cat, mdir, card)
+                if ok2:
+                    emit(c, job_id, "adapt", "ok",
+                         "复验通过：Agent 的修改在无干预条件下可复现（第 %s 轮）"
+                         % (agent_res.get("turns")))
+                    ok, err, tail = True, None, tail2
+                    agent_res["ok"] = True
+                    agent_res["verified_by_platform"] = True
+                else:
+                    ok, err, tail = False, (err2 or err), tail2
+                    if agent_res.get("ok"):
+                        emit(c, job_id, "adapt", "warn",
+                             "Agent 声称跑通，但平台复验未通过 —— 以复验为准，判为失败")
+                    agent_res["ok"] = False
+                    agent_res["verified_by_platform"] = False
+
+        # 入口状态可能在 agent 介入后变化（新写了或改写了入口）
+        state2, sha2 = install_replay_entry(mdir, model)
+        if sha2:
+            entry_state, entry_sha = state2, sha2
+
+        if ok:
             emit(c, job_id, "validate_infer", "ok", "端到端加载验证通过")
-            emit(c, job_id, "quality", "ok", "产物校验：probe.json 已生成")
+            # 产物校验不再靠"文件存在"这种间接证据：回同步后读回真实 loaded
+            ok_sync, files = sync_probe_meta(mdir)
+            loaded = None
+            pj = os.path.join(ROOT, "_probe", _probe_name(mdir), "probe.json")
+            try:
+                if os.path.isfile(pj):
+                    loaded = bool(json.load(open(pj, encoding="utf-8")).get("loaded"))
+            except Exception:  # noqa: BLE001
+                loaded = None
+            if loaded is True:
+                emit(c, job_id, "quality", "ok",
+                     "产物校验：probe.json loaded=true（回同步 %s 个文件）" % len(files or []))
+            elif loaded is False:
+                emit(c, job_id, "quality", "warn",
+                     "产物校验：探针 stdout 通过但 probe.json 记的是 loaded=false，判为不一致")
+            else:
+                emit(c, job_id, "quality", "warn",
+                     "产物校验：读不到 probe.json（%s）" % (files[-1] if files else "未同步"))
 
-            # ---- 真正生成交付包 ----
-            # make_delivery.py 需要读模型目录（在算力服务器上），所以在那侧生成，
-            # 再把这一个包同步回虚拟机供网页下载。
-            # ---- ① 性能测试与调优（复用刚跑完探针的那张卡）----
             emit(c, job_id, "deliver", "running",
                  "性能测试与调优：测 P50/P95/P99 延迟、吞吐、显存…")
             rc_p, out_p = npu(
                 "bash %s/_probe/perf.sh %s %s %d 3 20"
-                % (REMOTE_ROOT, cat, os.path.basename(mdir), card), 1800)
+                % (REMOTE_ROOT, cat, _probe_name(mdir), card), 1800)
             _pl = [x for x in (out_p or "").splitlines() if x.startswith("PERF_VERDICT=")]
             if _pl:
                 emit(c, job_id, "deliver", "ok", "性能测试完成：%s" % _pl[-1].split("=", 1)[1])
@@ -980,11 +1598,10 @@ def run_migration(job_id, model):
                 emit(c, job_id, "deliver", "warn",
                      "性能测试未产出结果（%s）" % (out_p or "")[-90:].replace("\n", " "))
 
-            # ---- ② 权重镜像（三道闸门在 mk_image.sh 内）----
             emit(c, job_id, "deliver", "running", "构建模型权重镜像并上传 OBS…")
             rc_i, out_i = npu(
                 "bash %s/_probe/mk_image.sh %s %s 0"
-                % (REMOTE_ROOT, cat, os.path.basename(mdir)), 3600)
+                % (REMOTE_ROOT, cat, _probe_name(mdir)), 3600)
             _img_line = [x for x in (out_i or "").splitlines()
                          if x.startswith(("OK ", "SKIP_SIZE", "SKIP_DISK", "FAIL"))]
             if _img_line:
@@ -995,49 +1612,78 @@ def run_migration(job_id, model):
 
             emit(c, job_id, "deliver", "running", "生成交付包（DEPLOY/TEST_REPORT/run.sh…）…")
             pkg = model.replace("/", "-").lower()
-            # make_delivery.py 只处理 corpus_status.json 里的模型，
-            # 网页上新迁的模型必须先登记进去，否则会被跳过（交付包为空）。
             _register_in_corpus(model, cat, pkg)
             rc2, out2 = npu(
                 "cd %s/_tools && CORPUS_ROOT=%s timeout 300 python3 make_delivery.py"
                 % (REMOTE_ROOT, REMOTE_ROOT), 360)
             if rc2 != 0:
                 emit(c, job_id, "deliver", "warn",
-                     "交付包生成脚本返回 %s：%s" % (rc2, out2.strip().splitlines()[-1][:140] if out2.strip() else ""))
-            # 同步该包到虚拟机
+                     "交付包生成脚本返回 %s：%s"
+                     % (rc2, out2.strip().splitlines()[-1][:140] if out2.strip() else ""))
+            if agent_res and agent_res.get("transcript"):
+                try:
+                    _write_agent_report(mdir, model, pkg, agent_res)
+                    emit(c, job_id, "deliver", "ok",
+                         "Agent 介入记录已写入交付包（AGENT_REPORT.md，可审计）")
+                except Exception as e:  # noqa: BLE001
+                    emit(c, job_id, "deliver", "warn", "Agent 记录写入失败：%s" % str(e)[:120])
+
             local_pkg = os.path.join(ROOT, "_delivery", pkg)
             os.makedirs(local_pkg, exist_ok=True)
+            # 交付包里的入口必须是「当前真的能跑通的那份」。实测发现交付包里的
+            # entry.py 还停在 10-19 的旧版本（85637 B），而语料目录已经是 agent
+            # 改写后的 5142 B —— 客户拿到手还是跑不通。语料目录为准，反推回包。
+            rc_s, out_s = npu(
+                "M='%s/%s/entry.py'; P='%s/_delivery/%s/entry.py'; "
+                "if [ ! -f \"$M\" ]; then echo NO_ENTRY; "
+                "elif [ ! -f \"$P\" ] || ! cmp -s \"$M\" \"$P\"; then "
+                "cp -a \"$M\" \"$P\" && echo SYNCED; else echo SAME; fi"
+                % (REMOTE_ROOT, _probe_name(mdir), REMOTE_ROOT, pkg), 60)
+            _st = (out_s or "").strip().splitlines()[-1:] or [""]
+            if _st[0] == "SYNCED":
+                emit(c, job_id, "deliver", "ok",
+                     "交付包入口已按语料目录更新（旧包里的入口和现在跑通的不一致）")
             rc3, out3 = npu("ls %s/_delivery/%s 2>/dev/null | wc -l" % (REMOTE_ROOT, pkg), 60)
             have_remote = rc3 == 0 and out3.strip().isdigit() and int(out3.strip()) > 0
             if have_remote:
-                subprocess.run(
-                    ["rsync", "-az", "-e",
-                     "ssh -i %s -p 31236 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "
-                     "-o UserKnownHostsFile=%s" % (
-                         os.path.expanduser("~/.ssh/KeyPair-fae2027.pem"),
-                         os.path.expanduser("~/.ssh/known_hosts")),
+                p_rs = subprocess.run(
+                    ["rsync", "-az", "-e", _ssh_e(),
                      "root@61.241.77.3:%s/_delivery/%s/" % (REMOTE_ROOT, pkg),
-                     local_pkg + "/"],
-                    capture_output=True, text=True, timeout=180)
+                     local_pkg + "/"], capture_output=True, text=True, timeout=180)
+                # 回同步失败必须说出来：本地镜像是页面下载的来源，静默失败会
+                # 让"交付包已生成"变成假话（实测因此发过一份旧入口的包）。
+                if p_rs.returncode != 0:
+                    emit(c, job_id, "deliver", "warn",
+                         "交付包回同步失败（rsync rc=%s）：%s —— 页面下载的仍是旧内容"
+                         % (p_rs.returncode, (p_rs.stderr or "").strip()[-160:]))
                 nfiles = len(os.listdir(local_pkg)) if os.path.isdir(local_pkg) else 0
                 emit(c, job_id, "deliver", "ok",
                      "交付包已生成：%s.tar.gz（%d 个文件），可在页面「交付产物」下载"
                      % (pkg, nfiles))
             else:
                 emit(c, job_id, "deliver", "warn", "交付包未生成（%s）" % pkg)
+
+            _persist_recipe(job_id, c, model, cat, mdir, agent_res, entry_state, entry_sha)
+            if agent_res and agent_res.get("ok"):
+                _append_adaptation(model, agent_res, err)
+                emit(c, job_id, "deliver", "ok",
+                     "Agent 的修法已沉淀进适配库，下次同模型直接走复现包")
             emit(c, job_id, "deliver", "ok", "配方已归档，可用于下次快速迁移")
-            c.execute("UPDATE jobs SET status='succeeded', phase='deliver', exit_code=?, finished_at=?, result_json=? WHERE job_id=?",
-                      (rc, time.time(), json.dumps({"verdict": "LOAD-OK", "package": pkg},
-                                                   ensure_ascii=False), job_id))
+            c.execute("UPDATE jobs SET status='succeeded', phase='deliver', exit_code=0, "
+                      "finished_at=?, result_json=? WHERE job_id=?",
+                      (time.time(), json.dumps(
+                          {"verdict": "LOAD-OK", "package": pkg,
+                           # path 是"实际怎么走通的"（可能是 replay→agent），
+                           # route 只是跑之前的判定，别看混
+                           "route": route,
+                           "path": route + ("→agent" if agent_res and agent_res.get("ok") else ""),
+                           "agent_turns": (agent_res or {}).get("turns") if agent_res else 0,
+                           "agent_used": bool(agent_res and agent_res.get("ok"))},
+                          ensure_ascii=False), job_id))
         else:
             emit(c, job_id, "quality", "failed", err or "加载未通过")
-            # 从 probe.json 读「再挖一层」结论。
-            # 比解析 stdout 的 ERROR 行更稳：深挖是在子进程里做的，
-            # 结果落在 probe.json 的 deep 字段（root_cause / missing_package）。
             try:
-                pj = os.path.join(ROOT, "_probe",
-                                  os.path.basename(mdir) or model.replace("/", "__"),
-                                  "probe.json")
+                pj = os.path.join(ROOT, "_probe", _probe_name(mdir), "probe.json")
                 if os.path.isfile(pj):
                     _d = (json.load(open(pj, encoding="utf-8")) or {}).get("deep") or {}
                     if _d.get("root_cause"):
@@ -1050,7 +1696,6 @@ def run_migration(job_id, model):
                         if not err:
                             err = str(_d["root_cause"])
             except Exception as e:  # noqa: BLE001
-                # 不再静默：这类"读不到深挖结论"的 bug 之前被 pass 藏了整整一轮
                 emit(c, job_id, "quality", "warn",
                      "深挖结论读取失败：%s: %s" % (type(e).__name__, str(e)[:90]))
 
@@ -1059,8 +1704,6 @@ def run_migration(job_id, model):
                 emit(c, job_id, "quality", "warn",
                      "错误分桶：%s ｜ 证据：%s" % (bucket, err[:120]))
                 emit(c, job_id, "adapt", "warn", "建议动作：%s" % (advice or "待人工判读"))
-                # 自动诊断：按证据特征检索坑库，直接把「命中了哪条经验」推给客户，
-                # 不用客户再手动粘报错（对应 pitfall-index skill 的检索动作）。
                 try:
                     hits = diagnose(err, 2)
                     if hits:
@@ -1069,15 +1712,17 @@ def run_migration(job_id, model):
                                  "坑库命中 %d/%d [%s桶 %s·匹配度%s] %s → %s" % (
                                      i, len(hits), h["bucket"], h["bucket_cn"], h["score"],
                                      h["symptom"][:70], (h["direction"] or "")[:110]))
-                        emit(c, job_id, "adapt", "warn",
-                             "该模型可按上述已沉淀经验处置（逐步迁移路径）")
                     else:
                         emit(c, job_id, "adapt", "warn",
                              "坑库未命中 —— 属新坑；修好后请回写坑库（这是经验增长的来源）")
                 except Exception as e:  # noqa: BLE001
                     emit(c, job_id, "adapt", "warn", "坑库检索异常：%s" % str(e)[:80])
-            c.execute("UPDATE jobs SET status='failed', phase='quality', exit_code=?, finished_at=?, error=? WHERE job_id=?",
-                      (rc, time.time(), err, job_id))
+            if agent_res and not agent_res.get("skipped"):
+                emit(c, job_id, "adapt", "warn",
+                     "Agent 结论：%s" % ((agent_res.get("summary") or "")[:200]))
+            c.execute("UPDATE jobs SET status='failed', phase='quality', exit_code=1, "
+                      "finished_at=?, error=? WHERE job_id=?",
+                      (time.time(), err, job_id))
     except Exception as e:  # noqa: BLE001
         try:
             emit(c, job_id, "adapt", "failed", "执行异常：%s" % e)
@@ -1086,7 +1731,6 @@ def run_migration(job_id, model):
         except Exception:  # noqa: BLE001
             pass
     finally:
-        # 任何路径退出都要把卡还回去，否则并发跑几次后 8 张卡会被"泄漏"占满
         try:
             release_card(_card)
         except Exception:  # noqa: BLE001
@@ -1287,6 +1931,47 @@ class H(BaseHTTPRequestHandler):
             rows = c.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT 50").fetchall()
             c.close()
             return self._json([dict(x) for x in rows])
+        if u.path == "/api/agent":
+            cfg = agent_config()
+            return self._json({
+                "enabled": cfg["enabled"],
+                "model": cfg["model"],
+                "base_url": cfg["base_url"],
+                "key_present": bool(cfg["key"]),
+                "max_turns": cfg["max_turns"],
+                "max_wall_s": cfg["max_wall"],
+                "note": "只在「无复现包 / 指纹漂移 / 回放失败」时介入；已跑通且环境未变的任务不调用",
+            })
+        m = re.match(r"^/api/jobs/([\w-]+)/agent$", u.path)
+        if m:
+            jid = m.group(1)
+            c = db()
+            j = c.execute("SELECT job_id,model,route,status FROM jobs WHERE job_id=?",
+                          (jid,)).fetchone()
+            c.close()
+            if not j:
+                return self._json({"error": "no such job"}, 404)
+            rows = []
+            fp = os.path.join(ROOT, "_probe")
+            name = None
+            for d in os.listdir(fp) if os.path.isdir(fp) else []:
+                if d.replace("__", "/") == j["model"]:
+                    name = d
+                    break
+            tp = os.path.join(fp, name, "agent.jsonl") if name else None
+            if tp and os.path.isfile(tp):
+                for line in open(tp, encoding="utf-8"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rows.append(json.loads(line))
+                    except Exception:  # noqa: BLE001
+                        pass
+            return self._json({"job_id": jid, "model": j["model"],
+                               "route": j["route"], "status": j["status"],
+                               "turns": len([x for x in rows if x.get("kind") == "action"]),
+                               "transcript": rows})
         m = re.match(r"^/api/jobs/([\w-]+)$", u.path)
         if m:
             c = db()

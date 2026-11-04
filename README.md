@@ -30,14 +30,15 @@
 | | 算子开发平台 | 模型迁移工作台 | shell |
 |---|---|---|---|
 | 语言/框架 | Python FastAPI + React | 纯 Python `http.server` | 纯 Python `http.server` |
-| 有 agent 吗 | **有**，`@deepseek-ai/dsh` 0.2.0-rc.2 | **没有**，一行 LLM 代码都没有 | 没有 |
-| 大模型 | `deepseek-v4.1-flash-1017`（天宽网关） | 不调用任何 LLM | 不调用 |
-| "智能"从哪来 | 真 LLM + 工具调用 + 技能 | 配方库 + 坑库关键词打分 + 远端真推理 | — |
+| 有 agent 吗 | **有**，`@deepseek-ai/dsh` 0.2.0-rc.2 | **有**，自研 `agent_bridge.py`（只在需要时介入） | 没有 |
+| 大模型 | `deepseek-v4.1-flash-1017`（天宽网关） | 同一个模型、同一个网关 | 不调用 |
+| "智能"从哪来 | 真 LLM + 工具调用 + 技能 | 复现包回放（0 次 LLM）+ 失败时 Agent 介入 + 坑库检索 | — |
 | 端口 | 127.0.0.1:18078 | 127.0.0.1:8090 | 0.0.0.0:18080 |
 
-> 模型迁移平台的“agent 感”（解析→匹配配方→适配→验证→交付）全部来自 `emit()` 发出的
-> 流水线事件，不是模型生成。全仓 grep `openai|anthropic|chat/completions` 命中 0，
-> 连 HTTP 客户端都没有 import —— 详见 `docs/01-architecture.md`。
+> 模型迁移平台现在是**两条路线**：模型曾经跑通且环境指纹没变 → 回放复现包，
+> 一次 LLM 都不调；从没跑通 / 回放失败 → Agent 读证据、改入口、容器里验算、复跑，
+> 跑通后把新入口和指纹沉淀成下一次的复现包。判据只认容器打印的 `VERDICT=LOAD-OK`，
+> agent 自述成功不算数。详见 `docs/06-agent-design.md`。
 
 ## 目录结构
 
@@ -138,15 +139,19 @@ git log --oneline v0.1.0..HEAD        # 相对某个基线改了什么
 git diff v0.1.0 -- shell/gateway.py   # 只看网关改动
 ```
 
-当前基线 `v0.1.3` 的文件指纹（与生产机实测一致，可用于核对是否漂移）：
+当前基线 `v0.1.4` 的文件指纹（与生产机实测一致，可用于核对是否漂移）：
 
 | 文件 | SHA-256 前 16 位 |
 |---|---|
 | `shell/gateway.py` | `d358897b5921527e` |
 | `shell/portal.html` | `78fb21207384477d` |
 | `shell/tanku-logo.png` | `cd75e9b829711b8c` |
-| `model-platform/app.py` | `071229de59bf99fc` |
-| `model-platform/static/index.html` | `4a9c54e39024684f` |
+| `model-platform/app.py` | `479c1082535c2769`（2117 行） |
+| `model-platform/agent_bridge.py` | `6ab4d173c2bd90a1`（392 行，新增） |
+| `model-platform/static/index.html` | `78c980811b37fd41` |
+| `model-platform/start.sh` | `stop` 支持按端口反查（见 known-issues 2.6.4） |
+| `compute-side/_probe/probe.sh` | 入口 `--out` 两种约定自适应（见 known-issues 2.6.3） |
+| `compute-side/_probe/agent_exec.sh` | 新增，agent 的 `run_py` 入口 |
 | `operator/web/dist/index.html` | `29ed7c4b516735b0` |
 | `operator/web/dist/assets/index-kcZUWMFK.js` | 构建产物，随 dist 一起核对 |
 
@@ -159,7 +164,8 @@ git diff v0.1.0 -- shell/gateway.py   # 只看网关改动
 ```bash
 cd shell && python3 -m pytest tests -q        # 42 passed, 3 subtests (4.4s)
 cd ../operator/backend && python -m pytest -q # 571 collected, rc=0
-python3 -c "import ast;ast.parse(open('../model-platform/app.py').read())"   # OK, 1432 行
+cd ../model-platform && python3 -m unittest discover -s tests -v   # 32 passed（Agent 层/路线判定/沙箱边界）
+python3 -c "import ast;ast.parse(open('../model-platform/app.py').read())"   # OK, 2117 行
 ```
 
 需要在算力机上跑测试时，用 `control-venv312` 里的解释器（它带齐了 pytest 与后端依赖）。

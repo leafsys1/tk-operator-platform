@@ -109,10 +109,75 @@
 **现在怎么绕**：把「命中配方」只当**加速提示**，不当成功承诺；判据一律以
 `validate_infer` 阶段的 `模型加载成功` / `端到端加载验证通过` 为准。
 
-**正确修法**（未做）：
-- 配方随记录存环境指纹（镜像 digest、CANN/驱动版本、关键依赖版本、验证时间）；
-- fast route 前比对当前环境指纹，不一致则降级为 slow route 并在日志里说明「配方环境已变化，转逐步迁移」；
-- 失败诊断里区分「配方过期」与「模型本身不支持」，别都归到「未分类」。
+**正确修法（2026-11-04 已实施）**：
+- 配方随记录存环境指纹（探针镜像 ID + 驱动/固件版本，`env_fingerprint()`）；
+- 跑之前比对：指纹一致才 `replay`，不一致判 `agent` 并在日志里说明「配方环境已变化，转 Agent 适配」；
+- 没有指纹的历史配方不当承诺，先按原样回放一次，**成了就补指纹、不成才升级**（避免一上来全判 agent 白烧 LLM）；
+- 失败诊断里区分「配方过期」与「模型本身不支持」。
+
+实测（同一台机器，2026-11-04）：
+- `Qwen/Qwen2.5-0.5B-Instruct` 回放成功，`route=replay / agent_turns=0`，归档指纹 `7186ebe1ba5f8b4d`；
+- `microsoft/Florence-2-base`（旧配方无指纹 → 回放失败）转 Agent，4 轮改好入口，
+  复验 `VERDICT=LOAD-OK`、logits `(1,4,51289)` 全有限；
+- `AI-ModelScope/yolo_x_layout` 同理，Agent 16 轮写出 torchscript 入口，解码出真实版面框。
+
+顺带修掉三个让「配方命中 ≠ 能跑」更严重的地基缺陷，见 §2.6。
+
+---
+
+## 2.6 【高·已修】复现包从来没真正生效过：三个地基缺陷
+
+这三条是「配方命中却跑不通」的直接原因，2026-11-04 逐条实测定位并修复。
+
+### 2.6.1 探针结论从不回同步（最严重）
+
+`probe.sh` 在**算力机**写 `_probe/<M>/probe.json`，平台在**通算机**读本地
+`_probe/<M>/probe.json`，两者之间**没有同步**。
+
+实测证据：`Qwen__Qwen2.5-0.5B-Instruct` 远端 `probe.json` 时间 11-04 12:06（我那次跑通的），
+本地镜像还停在 10-19 07:52。后果：
+- 新迁的模型永远进不了复现包清单（`load_recipes()` 读的是本地）；
+- 失败的「再挖一层」结论读到的是上一次的旧数据；
+- 页面上的 `loaded` 判定与实际相反。
+
+修法：`sync_probe_meta()` 在每次探针后 rsync 回本地镜像；产物校验改成**同步后回读真实的
+`loaded` 字段**，不再用「文件存在」这种间接证据。
+
+### 2.6.2 交付包里的 entry.py 从没落位到语料目录
+
+`probe.sh` 的分支是「`$MDIR/entry.py` 存在 → 走专用入口」，但实测：
+
+| 位置 | 有 entry.py 的模型数 |
+|---|---|
+| `_delivery/<pkg>/entry.py`（交付包） | **111** |
+| `<分类>/<org__name>/entry.py`（语料目录） | **6** |
+
+也就是说，绝大多数模型「当年是靠 entry.py 跑通的」，重跑时那份代码根本不在探针会看的位置，
+只能退回通用探针再失败一次。修法：`install_replay_entry()` 在跑之前把交付包入口装回语料目录，
+跑通后把 agent 新写的入口同步进交付包。
+
+### 2.6.3 专用入口对 `--out` 的约定不统一
+
+`probe.sh` 固定传文件路径 `/workspace/out/entry_result.json`，但入口有两种写法：
+
+- 当**文件**用：`open(a.out,"w")` —— `Florence123/GroundVTS`
+- 当**目录**用：`makedirs(a.out)` + `join(a.out,"entry_result.json")` —— Florence-2 / MERT / GOT-OCR / BiRefNet / RMBG
+
+后果实测两连：
+1. 目录型入口把文件路径建成同名目录，产出落在 `entry_result.json/entry_result.json`，
+   归一化段落读不到、异常被 `2>/dev/null || true` 吞掉 → `probe.json` 一直是旧的
+   （Florence-2 的 `probe.json` 停在 10-19，而 11-04 当天的真实结论在里层，`loaded=false`）；
+2. 加了「拍平」补丁后，下一次跑又变成 `FileExistsError`（同名文件已存在，`makedirs` 失败）。
+
+修法：`probe.sh` 按入口源码判断它要哪种（`grep -E 'makedirs\([[:space:]]*a\.out|join\([[:space:]]*a\.out'`），
+目录型给 `_entry_out/` 子目录、文件型给文件路径，产物统一回收到 `$OUT`。
+两个真实入口各验一次：Florence-2 → 目录约定，GroundVTS → 文件约定。
+
+### 2.6.4 附带：`start.sh stop` 会因过期 pid 文件假停
+
+`server.pid` 指向旧进程时 `stop` 只打一句「未在运行」就退出，端口仍被占，新实例
+`EADDRINUSE` 启动失败、旧代码继续服务（实测出现「改了代码但 `/api/agent` 报的还是旧行为」）。
+修法：`stop` 在 pid 文件失效时按端口反查真正的监听者。
 
 ---
 
@@ -246,15 +311,25 @@ umask 077; printf 'admin:%s' "$(openssl rand -base64 18)" > "$SHELL_ROOT/access.
 
 ---
 
-## 12. 【提示】模型平台的"agent"是假的，别按 agent 方式排查
+## 12. 【提示】模型平台的 Agent 是真的，但它有明确的触发闸门
 
-它没有 LLM、没有工具调用、没有会话。看到"分析中/适配中"是 `emit()` 打的事件。
-要看真实进展只能看 `events` 表和算力机上的进程：
+2026-11-04 起 `model-platform/agent_bridge.py` 提供了真正的 agent 能力
+（LLM + 工具调用 + 多轮闭环，模型 `deepseek-v4.1-flash-1017`，走天宽网关）。
+但它**不是每次都用**，判据在 `decide_route()`：
+
+- 命中复现包 **且** 环境指纹一致 → `replay`，按记录原样重跑，**LLM 调用 0 次**；
+- 无复现包 / 指纹漂移 / 回放失败 → `agent`，才进入 LLM 循环。
+
+要判断一条任务到底调没调模型，看两个字段就够：
 
 ```bash
-sqlite3 $MODEL_ROOT/_platform/platform.db "select seq,phase,status,message from events where job_id='<id>' order by seq;"
-ssh ... 'docker ps | grep opx; ps -ef | grep -E "probe|mk_image"'
+curl -s http://127.0.0.1:8090/api/jobs/<job_id> | python3 -m json.tool | grep -E '"route"|result_json'
+# route=replay  → 没调 agent
+# route=agent   → 调了，逐轮动作在 /api/jobs/<job_id>/agent
 ```
 
-要它具备真正的 agent 能力（自动读错误日志给根因、自动改写配方），
-**当前代码里没有任何基础，得新写**，不是改配置能出来的。
+Agent 每一轮的工具调用、观察结果、LLM 用量都写进
+`_probe/<M>/agent.jsonl`，成功的任务还会把它整理成交付包里的 `AGENT_REPORT.md`。
+它**不能**改别的模型、不能改权重、不能出模型目录（`AgentSandbox._rel()` 拦越界路径）。
+
+agent 自述「跑通了」不算数：平台会自己再跑一次探针，只认容器打印的 `VERDICT=LOAD-OK`。

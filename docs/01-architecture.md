@@ -121,24 +121,29 @@ dsh 版本有个坑：`dsh` 是指向 `studio-dsh-launch.sh` 的软链，脚本�
 否则 `lib/bin.js` 在 `import.meta.main` 不可用时**静默 exit 0**，Studio 侧只看到
 「DSH exited with code 0」。装完必须验一遍 `dsh --version` 有输出。
 
-### 4.2 模型平台为什么"看起来像 agent"
+### 4.2 模型平台的能力分层（2026-11-04 起有真 agent 了）
 
-它的 7 个 phase（resolve → match_recipe → prepare_env → adapt → validate_infer → quality → deliver）
-全部来自 `emit()` 写进 `events` 表然后 SSE 推给前端。**没有一句是模型生成的**。
+7 个 phase（resolve → match_recipe → prepare_env → adapt → validate_infer → quality → deliver）
+仍然全部来自 `emit()` 写进 `events` 表然后 SSE 推给前端。区别是：
 
-真实的三层能力：
+**`adapt` 阶段现在有两种执行方式**，由 `decide_route()` 在跑之前判定：
 
-1. **配方库** `_manifest/recipes.json` —— 命中就走 fast route，直接复用上次成功的加载路线与依赖（页面会显示「历史耗时 18.6s」）
-2. **坑库** `_manifest/pitfalls.json` + `diagnose()` —— 纯**关键词子串打分**，按 bucket A/B/C/E 加权取 top3
-3. **远端真推理** —— `_probe/probe_model.py` 在算力机上用 `torch_npu` 真跑一遍
+| 路线 | 触发条件 | 执行方式 | LLM 调用 |
+|---|---|---|---|
+| `replay` 复现包回放 | 命中配方 + 环境指纹一致 + 入口哈希一致 | 按记录原样重跑探针 | **0 次** |
+| `agent` Agent 适配 | 无配方 / 指纹漂移 / 回放失败 | 探针失败后由 agent 读证据、改入口、验算、复跑 | 每轮 1 次，上限 16 轮 |
 
-判断依据（可复核）：`app.py` 的全部 import 只有
-`argparse json os re sqlite3 subprocess threading time uuid http.server urllib.parse`。
-没有 `requests`/`httpx`/`urllib.request`，**物理上无法发任何 HTTP 请求**。
+四层能力（从旧到新）：
 
-### 4.3 没有 agent，未知模型是怎么迁移的（完整链路）
+1. **配方库** `_manifest/recipes.json` + `_probe/<M>/recipe.json` —— 存「怎么跑通的」**和当时的环境指纹**
+2. **坑库** `_manifest/pitfalls.json` + `diagnose()` —— 关键词子串打分，按 A/B/C/E 分桶取 top3，作为 agent 的先验
+3. **复现包** —— 语料目录里的 `entry.py`（真的让它跑通的那份代码）+ `recipe.json`；`probe.sh` 优先用它
+4. **Agent 介入层** `agent_bridge.py` —— 只在 1–3 都失效时上场，有界、可审计（详见 `06-agent-design.md`）
 
-没有任何"模型自己思考"的环节，全部是**规则 + 配方复用 + 经验库检索 + 远端真跑**：
+历史提醒：2026-11-04 之前这一层是**没有** agent 的，`app.py` 当时连 `urllib.request` 都不 import。
+现在 agent 走 `urllib.request` 调天宽网关，`grep -n "agent_bridge" app.py` 可查到接入点。
+
+### 4.3 复现包回放的完整链路
 
 ```
 ① find_corpus_dir(model)        语料库有没有这个模型？目录名把 / 换成 __ 匹配
