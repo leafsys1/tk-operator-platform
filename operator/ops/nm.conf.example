@@ -1,0 +1,61 @@
+# 上机测试配置（本机；不含任何凭据明文 —— 私钥只存路径引用）
+# 由 scripts/nm_test.sh 读取。**环境变量优先**：这里一律用 ${VAR:-默认} 写法，
+# 所以 `OPX_IMAGE=xxx scripts/nm_test.sh ...` 能直接覆盖本文件。
+
+OPX_SSH=${OPX_SSH:-tk36}
+# 非 22 端口时填（页面登记的 user@host:port 会被拆出来注入这里）
+OPX_SSH_PORT=${OPX_SSH_PORT:-}
+OPX_SSH_KEY=${OPX_SSH_KEY:-"$HOME/work/pem/KeyPair-fae2027.pem"}
+OPX_REMOTE_ROOT=${OPX_REMOTE_ROOT:-/data/lfx/op-agent/runs}
+OPX_WORKSPACE=${OPX_WORKSPACE:-"$HOME/Projects/personal/op-agent/workspaces/cann-ops"}
+
+# 算子开发镜像：lfx-op-dev-910b:torch210-cann910（torch 2.10.0 + torch_npu 2.10.0.post4）
+# —— 2026-10-14 实测：它是唯一能真正看到卡的那个（CANN 底座镜像没有 torch）
+OPX_IMAGE=${OPX_IMAGE:-"lfx-op-dev-910b:torch210-cann910"}
+
+# 设备映射 / 驱动挂载 / 提权 —— 「能起 ≠ 能跑算子」全在这一行。
+# 2026-10-14 逐项实测（每一条都是踩出来的）：
+#   ① 只挂 davinci_manager/devmm_svm/hisi_hdc → 容器里 npu-smi 报 dcmi -8005（看不到卡）
+#   ② 补上 davinci0..7 + /etc/ascend_install.info → CANN 底座镜像 npu-smi 正常
+#   ③ 但带 torch_npu 的镜像仍 npu devices 0（它自带 CANN，靠挂载不够）
+#   ④ 加 --privileged 后 → npu-smi 出 Product Name、torch_npu 看到设备 ✓
+#   ⑤ 但 torch_npu 只报 1 张卡（而容器里 npu-smi 能看到 8 张）→ 必须显式给
+#      ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7，给了才是 count=8 / Ascend910B1
+# 另外：该镜像自带 ENTRYPOINT 会 source 一堆 set_env 并卡死 → 用 OPX_ENTRYPOINT=bash 绕开，
+#      环境准备交给 OPX_ENV_RECIPE。
+OPX_DOCKER_ARGS=${OPX_DOCKER_ARGS:-"--privileged -e ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 -e OPENBLAS_NUM_THREADS=1 --device=/dev/davinci_manager --device=/dev/devmm_svm --device=/dev/hisi_hdc --device=/dev/davinci0 --device=/dev/davinci1 --device=/dev/davinci2 --device=/dev/davinci3 --device=/dev/davinci4 --device=/dev/davinci5 --device=/dev/davinci6 --device=/dev/davinci7 -v /usr/local/dcmi:/usr/local/dcmi -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi -v /usr/local/Ascend/driver:/usr/local/Ascend/driver -v /etc/ascend_install.info:/etc/ascend_install.info"}
+OPX_ENTRYPOINT=${OPX_ENTRYPOINT:-bash}
+
+# 容器内的环境准备：把镜像自带的 CANN 环境链 source 全（只 source 第一段不够）
+# 注意 \$f 要转义：本文件是在 set -u 下被 source 的，不转义会在读取时就被展开而报 unbound variable
+OPX_ENV_RECIPE=${OPX_ENV_RECIPE:-"for f in /usr/local/Ascend/ascend-toolkit/set_env.sh /usr/local/Ascend/*/share/info/ascendnpu-ir/bin/set_env.sh /usr/local/Ascend/nnal/atb/set_env.sh; do [ -f \"\$f\" ] && . \"\$f\" >/dev/null 2>&1 || true; done"}
+
+# 远端容器超时（必配：实测 torch_npu 初始化可能挂死，没有它本地会无限等）
+OPX_TIMEOUT=${OPX_TIMEOUT:-900}
+
+# ---- 构建缓存（2026-10-20 加）------------------------------------------------
+# key = op + 源码快照 sha256 + 镜像 digest。build 成功后把 exe 存到远端
+#   $OPX_BUILD_CACHE_ROOT/<op>/<snapshot>/<image>/<op>
+# test/benchmark/profile 命中时放回 /ws/ops/<op>/build/，跳过容器内补编；
+# 未命中仍自动补编并回存。manifest 里会记 build_cache.status/key。
+OPX_BUILD_CACHE=${OPX_BUILD_CACHE:-1}          # 0 = 关闭
+# OPX_FORCE_BUILD=${OPX_FORCE_BUILD:-0}        # 1 = 强制重编并覆盖缓存
+# OPX_BUILD_CACHE_ROOT=${OPX_BUILD_CACHE_ROOT:-$OPX_REMOTE_ROOT/.build-cache}
+
+# ---- 设备互斥（2026-10-15 加）------------------------------------------------
+# tk36 是共享机（还有别人的容器）。指定设备后脚本会在远端用 flock 拿
+#   $OPX_REMOTE_ROOT/.locks/dev<N>.lock
+# 拿不到就**不跑**（exit 3，归到失败分类 env_failed），而不是硬挤上去：
+#   - 卡被占时容器可能直接起不来（实测 dcmi ... device is used ret=-8020）；
+#   - 挤上去采到的耗时会带邻居，方案 §4.6 的「同条件对比」就不成立了。
+# 不设 OPX_DEVICES = 不取锁（manifest 里 lock_mode=none，门禁会提醒）。
+# 实际选哪张卡由控制台的前置检查给出（读 npu-smi 进程占用，见 backend/app/services/devices.py）。
+# OPX_DEVICES=${OPX_DEVICES:-0}
+# OPX_LOCK_ROOT=${OPX_LOCK_ROOT:-$OPX_REMOTE_ROOT/.locks}
+# OPX_LOCK_MODE=${OPX_LOCK_MODE:-exclusive}   # 基准/采集必须是 exclusive
+
+# ---- 台账回填与版本对齐（跑完 POST 一条 run，再走门禁）--------------------------
+OPX_API=${OPX_API:-http://127.0.0.1:8077}
+# OPX_TASK_ID=${OPX_TASK_ID:-2}
+# 下面几个一般不用手填：控制台生成的 plan.command 会带上（版本对齐靠它们）
+# OPX_IMAGE_ID / OPX_HOST_ID / OPX_SPEC_VERSION_ID / OPX_CRITERIA_REF / OPX_SUITE_REF

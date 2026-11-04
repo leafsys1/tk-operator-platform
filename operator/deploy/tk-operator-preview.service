@@ -1,0 +1,18 @@
+[Unit]
+Description=Tiankuan operator workspace isolated preview (not production)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hzzg
+Group=hzzg
+WorkingDirectory=/data/lfx/op-agent-console-20261101/app/backend
+EnvironmentFile=/data/lfx/op-agent-console-20261101/preview-gateway/operator-preview.env
+ExecStart=/data/lfx/op-agent-console-20261101/control-venv312/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 18078 --workers 1
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

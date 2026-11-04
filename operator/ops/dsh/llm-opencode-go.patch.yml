@@ -1,0 +1,24 @@
+# 一次性 overlay：把 opencode go（OpenAI 兼容网关）作为 headless profile 的默认模型路由。
+# 用法：OPX_LLM_KEY=<key> dsh --profile headless --patch ops/dsh/llm-opencode-go.patch.yml --json "<任务>"
+# 语义：同 id 的裸条目按「替换整行 config」生效（不是深合并）。
+- id: llm-pi-ai
+  config:
+    providers:
+      opencode-go:
+        displayName: OpenCode Go
+        apiKeyEnv: OPX_LLM_KEY
+        api: openai-completions
+        baseURL: https://opencode.ai/inference/go/v1
+        compat:
+          thinkingFormat: deepseek
+        headers:
+          x-opencode-session: dsh-op-agent-0001
+          User-Agent: op-agent-console/0.1 (dsh)
+        models:
+          - id: deepseek-v4.1-flash
+            name: DeepSeek V4.1 Flash
+            contextWindow: 262144
+- id: agent-default-model
+  config:
+    provider: opencode-go
+    model: deepseek-v4.1-flash

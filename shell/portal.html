@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/brand/tanku.png">
+<title>天宽科技 · 智能开发工作台</title>
+<style>
+:root{color-scheme:light;--ink:#24243a;--muted:#77738f;--line:#e5e3ef;--purple:#6557d2;--purple-strong:#5144bd;--purple-soft:#f0edff;--surface:#fff;--canvas:#f7f6fb;--ui:Inter,"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden}body{font:15px/1.5 var(--ui);color:var(--ink);background:var(--canvas);-webkit-font-smoothing:antialiased}button{font:inherit}.workspace{height:100vh;display:grid;grid-template-columns:64px minmax(0,1fr);grid-template-rows:62px minmax(0,1fr)}
+.rail{grid-row:1/3;display:flex;flex-direction:column;align-items:center;gap:9px;padding:12px 7px;background:var(--canvas);border-right:1px solid rgba(101,87,210,.07)}.rail-mark{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(145deg,#f0edff,#e7e1ff);color:var(--purple);margin-bottom:13px}.rail-mark svg{width:21px;height:21px}.product-tab{width:50px;min-height:62px;border:0;border-radius:11px;background:transparent;color:#77738f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;font-size:11px;line-height:1.2;transition:background .15s,color .15s}.product-tab span{white-space:nowrap;font-size:10px;letter-spacing:-.35px}.product-tab svg{width:20px;height:20px}.product-tab:hover{background:#f4f1ff;color:var(--purple-strong)}.product-tab[aria-selected="true"]{background:var(--purple-soft);color:var(--purple-strong);font-weight:650}.product-tab:focus-visible{outline:2px solid var(--purple);outline-offset:2px}
+.brandbar{grid-column:2;display:flex;align-items:center;gap:18px;padding:0 22px;background:var(--canvas);border-bottom:1px solid rgba(101,87,210,.07);color:#202f4b;min-width:0}.company-logo{display:block;width:118px;height:29px;object-fit:contain;object-position:left center;flex:none;image-rendering:auto}.brand-divider{height:22px;width:1px;background:#c9c5dc}.brand-title{font-size:15px;font-weight:600;letter-spacing:.01em;white-space:nowrap;color:#33415c}.brand-subtitle{margin-left:auto;font-size:13px;color:#7c86a0;white-space:nowrap}
+.viewport{grid-column:2;min-width:0;min-height:0;background:var(--canvas);position:relative}.product-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--canvas)}.product-frame[hidden]{display:none}
+@media(max-width:640px){.workspace{grid-template-columns:54px minmax(0,1fr);grid-template-rows:56px minmax(0,1fr)}.rail{padding:9px 4px;gap:6px}.rail-mark{width:34px;height:34px;margin-bottom:8px}.product-tab{width:46px;min-height:56px;font-size:10px}.brandbar{padding:0 12px;gap:10px}.company-logo{width:128px;height:35px}.brand-title{font-size:14px}.brand-subtitle{display:none}}
+</style>
+</head>
+<body>
+<div class="workspace">
+  <nav class="rail" role="tablist" aria-label="产品工作台切换" aria-orientation="vertical">
+    <div class="rail-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></div>
+    <button class="product-tab" id="tab-model" role="tab" aria-controls="panel-model" aria-selected="true" tabindex="0" data-product="model" title="模型迁移工作台">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg><span>模型迁移</span>
+    </button>
+    <button class="product-tab" id="tab-operator" role="tab" aria-controls="panel-operator" aria-selected="false" tabindex="-1" data-product="operator" title="算子开发平台">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4M10 10h4v4h-4z"/></svg><span>算子开发</span>
+    </button>
+  </nav>
+  <header class="brandbar">
+    <img class="company-logo" src="/brand/tanku.png" alt="天宽科技 TANKUAN">
+    <span class="brand-divider" aria-hidden="true"></span>
+    <span class="brand-title" id="active-title">模型迁移工作台</span>
+    <span class="brand-subtitle">智能开发工作台</span>
+  </header>
+  <main class="viewport" id="workspace-panels">
+    <iframe class="product-frame" id="panel-model" role="tabpanel" aria-labelledby="tab-model" title="模型迁移工作台" src="/model/" loading="eager"></iframe>
+    <iframe class="product-frame" id="panel-operator" role="tabpanel" aria-labelledby="tab-operator" title="算子开发平台" data-src="/operator/" hidden></iframe>
+  </main>
+</div>
+<script>
+(()=>{
+ const tabs=[...document.querySelectorAll('[role="tab"]')];
+ const frames={model:document.getElementById('panel-model'),operator:document.getElementById('panel-operator')};
+ const titles={model:'模型迁移工作台',operator:'算子开发平台'};
+ function activate(name,focus=false){
+   for(const tab of tabs){const selected=tab.dataset.product===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;if(selected&&focus)tab.focus()}
+   for(const [key,frame] of Object.entries(frames)){const selected=key===name;frame.hidden=!selected;if(selected&&!frame.src)frame.src=frame.dataset.src}
+   document.getElementById('active-title').textContent=titles[name];history.replaceState(null,'','#'+name);
+ }
+ for(const tab of tabs){tab.addEventListener('click',()=>activate(tab.dataset.product));tab.addEventListener('keydown',e=>{if(e.key==='ArrowDown'||e.key==='ArrowRight'||e.key==='ArrowUp'||e.key==='ArrowLeft'){e.preventDefault();const i=tabs.indexOf(tab);const n=(i+((e.key==='ArrowDown'||e.key==='ArrowRight')?1:tabs.length-1))%tabs.length;activate(tabs[n].dataset.product,true)}})}
+ const initial=location.hash==='#operator'?'operator':'model';activate(initial);
+})();
+</script>
+</body>
+</html>

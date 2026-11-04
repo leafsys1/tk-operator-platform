@@ -1,0 +1,31 @@
+# 安装（在虚拟机 172.16.111.102 上，需要 sudo）：
+#   sudo cp ~/workspace/model-corpus/model-migration-platform.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now model-migration-platform
+#
+# 管理：
+#   systemctl status model-migration-platform
+#   journalctl -u model-migration-platform -f
+#   sudo systemctl restart model-migration-platform
+[Unit]
+Description=一键模型迁移平台（虚拟机侧：代码与数据在本机，算力派发到 61.241.77.3）
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hzzg
+WorkingDirectory=/home/hzzg/workspace/model-corpus/_platform
+Environment=CORPUS_ROOT=/home/hzzg/workspace/model-corpus
+Environment=COMPUTE_SSH=root@61.241.77.3
+Environment=COMPUTE_PORT=31236
+Environment=COMPUTE_KEY=/home/hzzg/workspace/.ssh/KeyPair-fae2027.pem
+Environment=COMPUTE_ROOT=/data/model_corpus
+ExecStart=/usr/bin/python3 /home/hzzg/workspace/model-corpus/_platform/app.py --port 8090 --root /home/hzzg/workspace/model-corpus
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/hzzg/workspace/model-corpus/_platform/server.log
+StandardError=append:/home/hzzg/workspace/model-corpus/_platform/server.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,54 @@
+# ---- 部署现场配置（每台机器不同，不进库）----
+deploy/site.env
+
+# ---- 密钥与凭据：任何情况下都不许进库 ----
+*.pem
+*.key
+secrets/
+keys/
+access.txt
+site.env
+.env
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+control-venv*/
+*.egg-info/
+
+# ---- Node ----
+node_modules/
+# 注意：operator/web/dist/ 是**故意入库**的构建产物。
+# 生产就是直接跑 dist，不在服务器上 build；入库才能保证「clone 下来就能起」。
+# 改前端源码后必须重新 `npm run build` 并把新的 dist 一起提交。
+npm-debug.log*
+
+# ---- 运行数据：过程证据不进库，另有台账 ----
+runs/
+archives/
+reports/
+case-library/
+workspaces/
+*.db
+*.db-wal
+*.db-shm
+server.log
+platform.pid
+
+# ---- 备份文件（回滚用的临时产物）----
+*.bak-*
+*.before-*
+*.pending.py
+
+# ---- 编辑器/系统 ----
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# ---- 验证过程的截图与大日志 ----
+tools/*.png
+*.log

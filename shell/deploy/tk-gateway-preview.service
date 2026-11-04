@@ -1,0 +1,26 @@
+[Unit]
+Description=Tiankuan internal read-only preview gateway (not production)
+After=network-online.target tk-operator-preview.service
+Wants=network-online.target tk-operator-preview.service
+
+[Service]
+Type=simple
+User=hzzg
+Group=hzzg
+WorkingDirectory=/data/lfx/op-agent-console-20261101/preview-gateway
+Environment=WORKBENCH_BIND=0.0.0.0
+Environment=WORKBENCH_PORT=18080
+Environment=WORKBENCH_AUTH_REQUIRED=0
+Environment=WORKBENCH_ALLOWED_CIDRS=127.0.0.0/8,172.16.111.0/24
+Environment=WORKBENCH_ALLOWED_HOSTS=*
+Environment=WORKBENCH_PREVIEW_GATE=0
+Environment=WORKBENCH_OPERATOR_READONLY=0
+Environment=WORKBENCH_MODEL_READONLY=0
+Environment=WORKBENCH_CREDENTIAL_FILE=/data/lfx/op-agent-console-20261101/preview-gateway/access.txt
+ExecStart=/usr/bin/python3 -u /data/lfx/op-agent-console-20261101/preview-gateway/gateway-v2.py
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

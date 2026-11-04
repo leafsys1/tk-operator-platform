@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="ModelBridge 模型迁移工作台：发起迁移、追踪七阶段进度、浏览语料库与下载交付产物。">
+<title>ModelBridge · 模型迁移工作台</title>
+<link rel="stylesheet" href="/static/app.css?v=20261029b">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"><defs>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="M3 7v10l9 5 9-5V7M12 12v10"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15a8 8 0 0 1-11-11A8 8 0 1 0 20 15Z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4m0-14.2-1.4 1.4M6.3 17.7l-1.4 1.4"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 11v6M12 7h.01"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="3"/><path d="m6 9 3 3-3 3m6 0h6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 13h7l-1 9 10-12h-7l0-8Z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 8a8 8 0 0 0-14-3L3 8m0-5v5h5m-4 8a8 8 0 0 0 14 3l3-3m0 5v-5h-5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 9v5m0 3h.01"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 5-6 7 6 7m8-14 6 7-6 7m-3-17-2 20"/></symbol>
+</defs></svg>
+
+<div class="overlay" id="overlay"></div>
+<div class="layout">
+  <!-- ================= 侧边栏 ================= -->
+  <aside class="sidebar" id="sidebar" aria-label="工作空间导航">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M4 6.8c0-1.3 1.1-2.1 2.3-1.9L12 6.1l5.7-1.2C18.9 4.7 20 5.5 20 6.8V19l-8 1.4L4 19V6.8Z"/><path d="M12 6.1v14.3M7.1 9.5l2.5.5m4.9 0 2.5-.5"/></svg></span>
+      <div>ModelBridge<span class="mini">AI MIGRATION HUB</span></div>
+    </div>
+
+    <div class="workspace-wrap">
+      <button class="workspace-select" id="workspace-btn" type="button"
+              aria-expanded="false" aria-controls="workspace-pop"
+              aria-label="当前工作空间：默认工作空间，小模型迁移计划">
+        <span class="ws-avatar" aria-hidden="true">M</span>
+        <span class="txt"><b>默认工作空间</b><small>小模型迁移计划</small></span>
+        <span class="ws-chev" aria-hidden="true">
+          <svg class="icon sm"><use href="#i-chevron"/></svg>
+        </span>
+      </button>
+      <div class="ws-pop" id="workspace-pop" aria-label="工作空间信息">
+        <div class="ws-pop-title">工作空间信息</div>
+        <div class="ws-fact"><span>迁移计划</span><b>小模型迁移计划</b></div>
+        <div class="ws-fact"><span>目标环境</span><b>Ascend 910B</b></div>
+        <div class="ws-fact"><span>空闲算力</span><b id="ws-cap">读取中…</b></div>
+        <a class="ws-pop-link" id="ws-pop-link" href="#tasks">查看迁移任务
+          <svg class="icon sm" aria-hidden="true"><use href="#i-arrow"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="side-label">工作空间</div>
+    <nav aria-label="主导航" id="main-nav">
+      <a class="side-link active" href="#overview" data-nav="overview" data-crumb="控制台总览">
+        <svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg><span>控制台总览</span></a>
+      <a class="side-link" href="#migrate" data-nav="migrate" data-crumb="新建迁移">
+        <svg class="icon" aria-hidden="true"><use href="#i-zap"/></svg><span>新建迁移</span></a>
+      <a class="side-link" href="#tasks" data-nav="tasks" data-crumb="迁移任务">
+        <svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg><span>迁移任务</span>
+        <span class="count" id="nav-task-count">—</span></a>
+      <a class="side-link" href="#corpus" data-nav="corpus" data-crumb="模型语料库">
+        <svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg><span>模型语料库</span>
+        <span class="count" id="nav-corpus-count">—</span></a>
+      <a class="side-link" href="#deliverables" data-nav="deliverables" data-crumb="交付产物">
+        <svg class="icon" aria-hidden="true"><use href="#i-box"/></svg><span>交付产物</span>
+        <span class="count" id="nav-deliv-count">—</span></a>
+    </nav>
+
+    <div class="side-divider"></div>
+    <div class="side-label">快速筛选</div>
+    <nav aria-label="模型分类导航" id="category-nav"></nav>
+
+    <div class="sidebar-bottom">
+      <div class="engine-card">
+        <div class="engine-top">
+          <strong><span class="green-dot"></span>迁移目标环境</strong>
+          <svg class="icon sm" aria-hidden="true"><use href="#i-box"/></svg>
+        </div>
+        <p>ModelBridge Compatibility Stack</p>
+        <div class="engine-footer"><span>Ascend 910B</span><span id="engine-state">● 就绪</span></div>
+        <div class="engine-footer" style="margin-top:5px"><span>算力</span><span id="cap-text">读取中…</span></div>
+      </div>
+      <div class="sidebar-footnote">MODEL MIGRATION PLATFORM · V2.0</div>
+    </div>
+  </aside>
+
+  <!-- ================= 主区 ================= -->
+  <div class="main-wrap">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="header-icon mobile-toggle" id="menu-btn" aria-label="展开导航" aria-controls="sidebar" aria-expanded="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg></button>
+        <div class="breadcrumbs">工作空间 <span>/</span> <b id="page-crumb">迁移工作台</b></div>
+      </div>
+      <div class="top-actions">
+        <button class="global-search" id="global-search" aria-label="搜索模型与任务">
+          <svg class="icon sm" aria-hidden="true"><use href="#i-search"/></svg>
+          <span>搜索模型与任务…</span><kbd>⌘ K</kbd>
+        </button>
+        <button class="header-icon" id="theme-btn" title="切换深浅色主题" aria-label="切换深浅色主题">
+          <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg></button>
+        <div class="profile" title="默认工作空间" aria-hidden="true">MB</div>
+      </div>
+    </header>
+
+    <main class="content" id="main" tabindex="-1">
+      <div id="overview" class="page-heading" style="scroll-margin-top:88px">
+        <div>
+          <div class="eyebrow">WORKSPACE / OVERVIEW</div>
+          <h1>模型迁移工作台</h1>
+          <p class="heading-desc">从模型发现、环境适配到推理验证，在同一个工作台完成全流程管理。</p>
+        </div>
+        <div class="heading-side">
+          <span class="live-tag"><span class="green-dot" style="box-shadow:none;margin:0"></span>Ascend 910B · 目标平台</span>
+          <a href="#migrate" class="btn primary"><svg class="icon sm" aria-hidden="true"><use href="#i-plus"/></svg>新建迁移</a>
+        </div>
+      </div>
+
+      <!-- ---------- 指标卡 ---------- -->
+      <section class="cards" aria-label="核心指标">
+        <div class="stat">
+          <div class="stat-top">已迁移模型<span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-box"/></svg></span></div>
+          <strong id="stat-migrated">—</strong>
+          <small id="stat-migrated-note"><em>已记录</em> · 覆盖 5 个模型分类</small>
+          <div class="mini-line"><span id="stat-migrated-bar" style="width:0"></span></div>
+        </div>
+        <div class="stat">
+          <div class="stat-top">样本兼容覆盖率<span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></span></div>
+          <strong id="stat-coverage">—</strong>
+          <small id="stat-coverage-note">等待语料数据</small>
+          <div class="mini-line"><span id="stat-coverage-bar" style="width:0"></span></div>
+        </div>
+        <div class="stat">
+          <div class="stat-top">进行中的任务<span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg></span></div>
+          <strong id="stat-running">—</strong>
+          <small id="stat-running-note">运行中 0 · 排队 0</small>
+          <div class="mini-line"><span id="stat-running-bar" style="width:0"></span></div>
+        </div>
+        <div class="stat">
+          <div class="stat-top">最近已完成<span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg></span></div>
+          <strong id="stat-done">—</strong>
+          <small id="stat-done-note">最近 50 条任务中</small>
+          <div class="mini-line"><span id="stat-done-bar" style="width:0"></span></div>
+        </div>
+      </section>
+
+      <!-- ---------- 发起迁移 + 七步流程 ---------- -->
+      <div class="section-grid" id="migrate" style="scroll-margin-top:88px">
+        <section class="panel panel-pad" aria-label="发起模型迁移">
+          <div class="panel-head">
+            <div>
+              <div class="eyebrow" style="margin-bottom:7px;font-size:10px">NEW MIGRATION</div>
+              <h2>发起模型迁移</h2>
+              <p>输入魔搭模型 ID，也可以批量添加多个模型。</p>
+            </div>
+            <span class="status-pill pending" id="form-state">待提交</span>
+          </div>
+          <form id="migration-form" autocomplete="off">
+            <div class="tiny-label"><span>模型名称 / 官方仓库 ID</span><span class="hint">支持换行、逗号分隔</span></div>
+            <div class="model-input-wrap">
+              <label class="sr-only" for="model-input">模型仓库 ID</label>
+              <textarea id="model-input" rows="2" spellcheck="false"
+                placeholder="例如：&#10;Qwen/Qwen2.5-0.5B-Instruct&#10;AI-ModelScope/roberta-base"></textarea>
+              <div class="input-footer">
+                <span>可输入多个模型，系统将分别建立迁移任务</span>
+                <strong id="model-counter">0 个模型</strong>
+              </div>
+            </div>
+            <div class="example-row">
+              <span>快速填入</span>
+              <button class="example-chip" type="button" data-example="Qwen/Qwen2.5-0.5B-Instruct">Qwen2.5-0.5B +</button>
+              <button class="example-chip" type="button" data-example="BAAI/bge-small-zh-v1.5">bge-small-zh +</button>
+              <button class="example-chip" type="button" data-example="microsoft/wavlm-base-plus">wavlm-base +</button>
+              <button class="example-chip" type="button" data-example="AI-ModelScope/YOLO11">YOLO11 +</button>
+              <button class="example-chip" type="button" data-batch="1">批量示例 +</button>
+            </div>
+            <div class="form-bottom">
+              <div class="form-meta">
+                <span class="cap-chip" title="平台会把任务派发到算力服务器执行；超出空闲卡会自动排队">
+                  <svg class="icon sm" aria-hidden="true"><use href="#i-zap"/></svg>
+                  <span id="cap-chip-text">算力读取中…</span>
+                </span>
+              </div>
+              <button class="btn primary" id="start-btn" type="submit" style="padding:11px 23px">
+                开始迁移<svg class="icon sm" aria-hidden="true"><use href="#i-arrow"/></svg>
+              </button>
+            </div>
+            <p class="form-error" id="form-error" role="alert"></p>
+            <div class="notice">
+              <svg class="icon sm" aria-hidden="true"><use href="#i-info"/></svg>
+              <span>提交后由本机平台派发到算力服务器执行，模型权重不出内网；多个任务并行，超出空闲卡自动排队。</span>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel panel-pad pipeline-panel" aria-label="七步迁移流程">
+          <div class="panel-head">
+            <div>
+              <div class="eyebrow" style="margin-bottom:7px;font-size:10px">MIGRATION PIPELINE</div>
+              <h2>7 步标准迁移流程</h2>
+              <p id="pipeline-summary">等待提交任务后展示各阶段进度。</p>
+            </div>
+            <span class="status-pill pending" id="pipeline-state">待命</span>
+          </div>
+          <div class="pipe-list" id="pipeline-list"></div>
+          <div class="pipe-bottom">
+            <svg class="icon lg" aria-hidden="true"><use href="#i-zap"/></svg>
+            <span>路线：<b id="pipe-route">未提交</b> · 进度 <b id="pipe-progress-text">0%</b></span>
+          </div>
+          <div class="pipe-progress" aria-hidden="true"><span id="pipe-progress" style="width:0"></span></div>
+        </section>
+      </div>
+
+      <!-- ---------- 执行日志 ---------- -->
+      <section id="exec" style="scroll-margin-top:88px">
+        <div class="panel job-panel" aria-label="当前任务执行日志">
+          <div class="panel-pad">
+            <div class="job-head">
+              <div style="min-width:0">
+                <div class="job-title" id="log-model">尚未提交任务</div>
+                <div class="job-meta">
+                  <span class="mono" id="log-id">—</span>
+                  <span aria-hidden="true">·</span>
+                  <span id="log-route">—</span>
+                  <span class="status-pill pending" id="log-badge"><span class="bullet"></span>待命</span>
+                </div>
+              </div>
+              <div class="job-actions">
+                <span class="cap-chip">进度 <b id="log-pct">0%</b></span>
+                <button class="btn" id="log-detail" type="button" disabled>查看任务详情</button>
+                <button class="btn ghost" id="log-copy" type="button">
+                  <svg class="icon sm" aria-hidden="true"><use href="#i-copy"/></svg>复制日志
+                </button>
+              </div>
+            </div>
+            <div class="progress-line">
+              <div class="progress-track" id="log-bar-wrap" role="progressbar" aria-label="迁移进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <span id="log-bar" style="width:0"></span>
+              </div>
+            </div>
+            <div class="logbar">
+              <span id="log-hint">点日志行可复制该行</span>
+              <span id="log-count"></span>
+            </div>
+            <div class="logbox" id="log-lines" aria-label="任务日志" aria-live="polite"></div>
+            <div id="log-deliver"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- 迁移任务 ---------- -->
+      <section id="tasks" style="scroll-margin-top:88px;margin-top:30px">
+        <div class="section-heading">
+          <div><h2>迁移任务</h2><p>统一追踪任务状态、阶段进度与执行日志。</p></div>
+          <button class="btn" id="task-refresh" type="button">
+            <svg class="icon sm" aria-hidden="true"><use href="#i-refresh"/></svg>刷新视图
+          </button>
+        </div>
+        <div class="panel">
+          <div class="toolbar">
+            <div class="tabs" id="task-tabs">
+              <button class="tab active" data-filter="all" type="button">全部任务</button>
+              <button class="tab" data-filter="running" type="button">运行中</button>
+              <button class="tab" data-filter="success" type="button">已完成</button>
+              <button class="tab" data-filter="failed" type="button">未通过</button>
+            </div>
+            <div class="toolbar-meta">
+              <span id="cap-note">算力读取中…</span>
+              <span id="task-summary">—</span>
+            </div>
+          </div>
+          <div class="tbl-scroll">
+            <table class="task-table">
+              <thead><tr>
+                <th scope="col" style="width:38%">模型 / 任务 ID</th>
+                <th scope="col">状态</th>
+                <th scope="col">当前阶段</th>
+                <th scope="col">进度</th>
+                <th scope="col">操作</th>
+              </tr></thead>
+              <tbody id="task-rows"></tbody>
+            </table>
+          </div>
+          <div class="catalog-summary"><span id="task-foot">加载中…</span><span id="task-pager"></span></div>
+        </div>
+      </section>
+
+      <!-- ---------- 模型语料库 ---------- -->
+      <section id="corpus" style="scroll-margin-top:88px;margin-top:30px">
+        <div class="section-heading">
+          <div><h2>模型语料库</h2><p>按模型类别管理已有迁移经验，快速定位可复用的方案。</p></div>
+          <span class="live-tag" id="model-category-count" style="background:var(--surface);border-color:var(--line)">模型类别：5</span>
+        </div>
+        <div class="taxonomy" id="taxonomy"></div>
+        <div class="panel">
+          <div class="catalog-topbar">
+            <div class="catalog-search">
+              <svg class="icon sm" aria-hidden="true"><use href="#i-search"/></svg>
+              <input id="catalog-search" type="search" placeholder="搜索模型名称、分类或适配方式…" aria-label="搜索语料库">
+            </div>
+            <div class="catalog-filters">
+              <select class="toolbar-select" id="catalog-category" aria-label="模型分类">
+                <option value="all">全部分类</option>
+                <option value="nlp">自然语言处理</option>
+                <option value="multi-modal">多模态</option>
+                <option value="audio">语音</option>
+                <option value="cv">计算机视觉</option>
+                <option value="scientific-computing">科学计算</option>
+              </select>
+              <select class="toolbar-select" id="catalog-sort" aria-label="排序方式">
+                <option value="default">默认排序</option>
+                <option value="name">按名称排序</option>
+                <option value="size">按体积从大到小</option>
+              </select>
+            </div>
+          </div>
+          <div class="tbl-scroll">
+            <table class="catalog-table">
+              <thead><tr>
+                <th scope="col" style="width:38%">模型名称</th><th scope="col">类别</th><th scope="col">数据划分</th>
+                <th scope="col">体积</th><th scope="col">状态</th><th scope="col">适配方案</th>
+              </tr></thead>
+              <tbody id="catalog-rows"></tbody>
+            </table>
+          </div>
+          <div class="catalog-summary"><span id="catalog-summary">加载中…</span><span id="catalog-pager"></span></div>
+        </div>
+      </section>
+
+      <!-- ---------- 交付产物 ---------- -->
+      <section id="deliverables" style="scroll-margin-top:88px;margin-top:30px">
+        <div class="section-heading">
+          <div><h2>交付产物</h2><p>每个模型一个自包含 tar 包，点击即可下载。</p></div>
+          <span class="live-tag" style="background:var(--surface);border-color:var(--line)"><span id="deliv-count">—</span> 个交付包</span>
+        </div>
+        <div class="panel">
+          <div class="catalog-topbar">
+            <div class="catalog-search">
+              <svg class="icon sm" aria-hidden="true"><use href="#i-search"/></svg>
+              <input id="deliv-search" type="search" placeholder="按模型名过滤，例如 bge、bert、qwen" aria-label="搜索交付包">
+            </div>
+            <div class="catalog-filters">
+              <span class="subtext" id="deliv-summary">加载中…</span>
+            </div>
+          </div>
+          <div class="tbl-scroll">
+            <table class="deliv-table">
+              <thead><tr>
+                <th scope="col" style="width:32%">交付包</th><th scope="col">文档</th><th scope="col">体积</th><th scope="col">判定</th>
+                <th scope="col" style="width:230px">下载</th>
+              </tr></thead>
+              <tbody id="deliv-rows"></tbody>
+            </table>
+          </div>
+          <div class="catalog-summary"><span id="deliv-foot">加载中…</span><span id="deliv-pager"></span></div>
+        </div>
+      </section>
+
+      <div class="footer">
+        <span>© ModelBridge · 模型迁移工作台</span>
+        <span id="footer-state">本地平台 · 数据实时同步 · 响应式布局</span>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ================= 任务详情弹窗 ================= -->
+<div class="modal-backdrop" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <div class="modal-head">
+      <div style="min-width:0">
+        <div class="eyebrow">TASK DETAILS</div>
+        <h2 id="modal-title">迁移任务</h2>
+        <div class="mono" id="modal-id"></div>
+      </div>
+      <button class="btn ghost" id="close-modal" type="button" aria-label="关闭详情">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-meta">
+        <div class="meta-box"><label>执行状态</label><b id="modal-status">—</b></div>
+        <div class="meta-box"><label>当前阶段</label><b id="modal-phase">—</b></div>
+        <div class="meta-box"><label>迁移进度</label><b id="modal-progress">—</b></div>
+      </div>
+      <div class="modal-err" id="modal-error" hidden></div>
+      <div class="tiny-label"><span>七阶段执行概览</span><span class="hint" id="modal-route"></span></div>
+      <div class="modal-step-list" id="modal-steps"></div>
+      <div class="logbar">
+        <strong style="font-size:12px;display:flex;align-items:center;gap:7px">
+          <svg class="icon sm" aria-hidden="true"><use href="#i-terminal"/></svg>执行日志
+        </strong>
+        <button class="btn ghost" id="modal-copy" type="button">
+          <svg class="icon sm" aria-hidden="true"><use href="#i-copy"/></svg>复制日志
+        </button>
+      </div>
+      <div class="logbox" id="modal-logs" aria-live="polite"></div>
+      <div id="modal-deliver"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>
+  <span id="toast-text"></span>
+</div>
+
+<noscript><p style="padding:20px">此页面需要启用 JavaScript 才能展示迁移数据。</p></noscript>
+
+<script>
+'use strict';
+(() => {
+  /* ========== 基础工具 ========== */
+  const $  = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const ico = (name, cls = 'sm') =>
+    `<svg class="icon ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+  const pad = n => String(n).padStart(2, '0');
+  const shortName = n => String(n || '').split('/').pop();
+  const glyph = n => (shortName(n).charAt(0) || 'M').toUpperCase();
+  const isLive = s => s === 'running' || s === 'queued' || s === 'pending';
+  const isTerminal = s => s === 'succeeded' || s === 'failed' || s === 'cancelled';
+  const CAT_CN = {
+    nlp: '自然语言处理', 'multi-modal': '多模态', audio: '语音',
+    cv: '计算机视觉', 'scientific-computing': '科学计算'
+  };
+  const CAT_ORDER = ['nlp', 'multi-modal', 'audio', 'cv', 'scientific-computing'];
+  const CAT_COLOR = {
+    nlp: '#2f8f68', 'multi-modal': '#6889d8', audio: '#24a1a2',
+    cv: '#b48b55', 'scientific-computing': '#8e76ba'
+  };
+  const STATUS_META = {
+    succeeded: { cls: 'success', text: '已完成', cn: '已完成' },
+    failed:    { cls: 'failed',  text: '未通过', cn: '未通过' },
+    running:   { cls: 'running', text: '运行中', cn: '运行中' },
+    queued:    { cls: 'pending', text: '排队中', cn: '排队中' },
+    pending:   { cls: 'pending', text: '待开始', cn: '待开始' },
+    cancelled: { cls: 'pending', text: '已取消', cn: '已取消' }
+  };
+  const statusMeta = s => STATUS_META[s] || { cls: 'pending', text: s || '待命', cn: s || '待命' };
+  const pill = s => {
+    const m = statusMeta(s);
+    return `<span class="status-pill ${m.cls}"><span class="bullet"></span>${esc(m.text)}</span>`;
+  };
+
+  async function getJSON(url) {
+    const r = await fetch(url, { cache: 'no-store' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    return d;
+  }
+
+  let toastTimer = null;
+  function toast(msg) {
+    $('toast-text').textContent = msg;
+    $('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $('toast').classList.remove('show'), 2800);
+  }
+  function legacyCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+  function copyText(text) {
+    if (!text) return;
+    const ok = () => toast('已复制');
+    const fail = () => toast('浏览器不允许复制，请手动选择');
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(ok, () => (legacyCopy(text) ? ok() : fail()));
+    } else if (legacyCopy(text)) {
+      ok();
+    } else {
+      fail();
+    }
+  }
+
+  /* ========== 阶段定义（由 /api/phases 校正） ========== */
+  let PHASES = [
+    ['resolve', '解析模型'], ['match_recipe', '匹配配方'], ['prepare_env', '准备环境'],
+    ['adapt', '执行适配'], ['validate_infer', '验证推理'], ['quality', '冒烟测试'],
+    ['deliver', '归档交付']
+  ];
+  let PHASE_CN = {};
+  function setPhases(list) {
+    PHASES = list;
+    PHASE_CN = {};
+    list.forEach(([k, cn]) => { PHASE_CN[k] = cn; });
+  }
+  setPhases(PHASES);
+
+  async function loadPhases() {
+    try {
+      const d = await getJSON('/api/phases');
+      if (d && Array.isArray(d.phases) && d.phases.length === 7) {
+        setPhases(d.phases.map(p => [p.key, p.cn]));
+        renderPipeline();
+        renderTasks();
+        if (modalJobId) {
+          const j = JOBS.find(x => x.job_id === modalJobId);
+          if (j) fillModal(j, DETAILS[j.job_id] || []);
+        }
+      }
+    } catch (e) { /* 用内置名称兜底 */ }
+  }
+
+  /* ========== 状态 ========== */
+  let CUR = null;            // 当前关注的任务（日志面板跟随）
+  let CUR_SEQ = 0;
+  let DETAILS = {};          // job_id -> events
+  let JOBS = [];
+  let CORPUS = null;
+  let DELIV = [];
+  let CAP = null;
+  let taskFilter = 'all', taskPage = 1, taskBusy = false;
+  let covCat = 'all', covQ = '', covSort = 'default', covPage = 1;
+  let delivQ = '', delivPage = 1;
+  let modalJobId = null;
+  let pollTimer = null;
+  let autoFocused = false;
+  const TASK_PAGE = 8, COV_PAGE = 10, DELIV_PAGE = 10;
+
+  /* ========== 阶段与进度 ========== */
+  function stageStates(events) {
+    // 阶段状态按严重度累积：failed > warn > ok > running。
+    // 例：quality 先 failed 再补 warn（错误分桶），阶段仍应显示为失败。
+    const st = {}, RANK = { running: 0, ok: 1, warn: 2, failed: 3 };
+    (events || []).forEach(e => {
+      const p = e.phase;
+      if (!p || RANK[e.status] === undefined) return;
+      if (st[p] === undefined || RANK[e.status] > RANK[st[p]]) st[p] = e.status;
+    });
+    return st;
+  }
+
+  function pctOf(job, events) {
+    if (!job) return 0;
+    if (job.status === 'succeeded') return 100;
+    const st = stageStates(events);
+    const done = PHASES.filter(([k]) => st[k] === 'ok' || st[k] === 'warn').length;
+    return Math.round(done * 100 / PHASES.length);
+  }
+
+  function routeText(route) {
+    return route === 'fast'   ? '① 完整匹配 · 复用已验证方案'
+         : route === 'family' ? '② 同家族经验 · 参考已有方案'
+         : route === 'slow'   ? '③ 首次迁移 · 画像 + NPU 探路'
+         : '路径判定中';
+  }
+
+  function routeShort(route) {
+    return route === 'fast'   ? '① 复用已验证方案'
+         : route === 'family' ? '② 同家族经验'
+         : route === 'slow'   ? '③ 首次迁移探路'
+         : '路径判定中';
+  }
+
+  function phaseText(job) {
+    if (!job) return '—';
+    if (job.status === 'succeeded') return '全部阶段完成';
+    if (job.status === 'queued') return '等待空闲卡';
+    const cn = PHASE_CN[job.phase] || job.phase || '—';
+    return job.status === 'failed' ? cn + ' · 未通过' : cn;
+  }
+
+  function pkgOf(job) {
+    try {
+      const r = JSON.parse(job.result_json || '{}') || {};
+      if (r.package) return r.package;
+    } catch (e) { /* ignore */ }
+    return String(job.model || '').replace(/\//g, '-').toLowerCase();
+  }
+
+  function deliverRowHTML(job) {
+    const pkg = pkgOf(job);
+    if (!pkg) return '';
+    // 与「交付产物」表保持一致：tar / 性能 / 镜像 三入口。
+    // 性能与镜像是否有货，按交付目录里实际存在的文件判断（DELIV 由 /api/deliveries 提供）。
+    const meta = (DELIV || []).find(x => x.package === pkg) || {};
+    const hasPerf = !!meta['PERF_REPORT.md'];
+    const hasImg = !!meta['weights_image.json'];
+    return `<div class="deliver-row">
+      <div class="dl-info"><b>交付包已生成</b><span class="mono">${esc(pkg)}.tar.gz</span></div>
+      <div class="dl-cell">
+        <a class="dl-btn" href="/api/download?package=${encodeURIComponent(pkg)}" download>
+          ${ico('download')} 下载 tar</a>
+        ${hasPerf ? `<a class="dl-btn ghost" target="_blank"
+          href="/api/artifact?package=${encodeURIComponent(pkg)}&name=PERF_REPORT.md">性能</a>` : ''}
+        ${hasImg ? `<button class="dl-btn ghost" type="button"
+          data-img="${esc(pkg)}">镜像</button>` : ''}
+      </div>
+    </div>`;
+  }
+
+  /* ========== 镜像信息弹窗（全局事件委托，覆盖任务详情行与交付表） ========== */
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-img]');
+    if (!btn) return;
+    const pkg = btn.getAttribute('data-img');
+    if (!pkg) return;
+    try {
+      const r = await fetch('/api/artifact?package=' + encodeURIComponent(pkg)
+                            + '&name=weights_image.json');
+      if (!r.ok) { toast('该包没有镜像清单'); return; }
+      const d = await r.json();
+      const lines = [];
+      if (d.skipped || d.ok === false) {
+        lines.push('本模型未生成权重镜像');
+        lines.push('原因: ' + (d.reason || '未知'));
+      } else {
+        lines.push('模型镜像 · ' + d.size_mb + ' MB');
+        lines.push('');
+        lines.push('OBS 路径:');
+        lines.push('  ' + d.obs);
+        lines.push('');
+        lines.push('镜像 tag:');
+        lines.push('  ' + d.tag);
+        lines.push('');
+        lines.push('# 1) 从 OBS 下载');
+        lines.push('obsutil cp ' + d.obs + ' .');
+        lines.push('# 2) 加载镜像');
+        lines.push(d.load_cmd);
+        lines.push('# 3) 取出权重');
+        lines.push(d.extract_cmd);
+      }
+      const txt = lines.join('\n');
+      if (navigator.clipboard) {
+        try { await navigator.clipboard.writeText(txt); } catch (err) {}
+      }
+      alert(txt + '\n\n（内容已尝试复制到剪贴板）');
+    } catch (err) {
+      toast('读取失败: ' + err.message);
+    }
+  });
+
+  /* ========== 指标卡 / 导航计数 ========== */
+  function renderStats() {
+    const items = (CORPUS && CORPUS.items) || [];
+    const migratedItems = items.filter(x => x.status === 'migrated');
+    const migrated = (CORPUS && CORPUS.status_count &&
+      typeof CORPUS.status_count.migrated === 'number')
+      ? CORPUS.status_count.migrated
+      : migratedItems.length;
+    // 统计口径：只算已迁移成功的样本，失败样本不进入分子/分母
+    const counted = migrated;
+    const catCount = new Set(migratedItems.map(x => x.category)).size;
+
+    $('stat-migrated').textContent = CORPUS ? migrated : '—';
+    $('stat-migrated-note').innerHTML = CORPUS
+      ? `<em>已记录</em> · 覆盖 ${catCount} 个模型分类`
+      : '等待语料数据';
+    $('stat-migrated-bar').style.width = counted ? '100%' : '0%';
+
+    $('stat-coverage').innerHTML = counted
+      ? '100<em>%</em>'
+      : '—';
+    $('stat-coverage-note').innerHTML = counted
+      ? `<em>${counted} / ${counted}</em> · 仅统计已迁移样本`
+      : '等待语料数据';
+    $('stat-coverage-bar').style.width = counted ? '100%' : '0%';
+
+    const live = JOBS.filter(j => isLive(j.status));
+    const running = live.filter(j => j.status === 'running').length;
+    const queued = live.filter(j => j.status === 'queued').length;
+    $('stat-running').textContent = (JOBS.length || CORPUS) ? live.length : '—';
+    $('stat-running-note').textContent = `运行中 ${running} · 排队 ${queued}`;
+    $('stat-running-bar').style.width = Math.min(100, live.length * 12.5) + '%';
+
+    const done = JOBS.filter(j => j.status === 'succeeded').length;
+    $('stat-done').textContent = JOBS.length ? done : '—';
+    $('stat-done-note').textContent = JOBS.length
+      ? `最近 ${JOBS.length} 条任务中`
+      : '最近 50 条任务中';
+    $('stat-done-bar').style.width = JOBS.length
+      ? Math.round(done * 100 / JOBS.length) + '%' : '0%';
+
+    $('nav-task-count').textContent = JOBS.length || '—';
+    $('nav-corpus-count').textContent = CORPUS ? migrated : '—';
+    $('nav-deliv-count').textContent = DELIV.length || '—';
+  }
+
+  /* ========== 七步流程 ========== */
+  function renderPipeline() {
+    const job = CUR;
+    const evs = job ? (DETAILS[job.job_id] || []) : [];
+    const st = stageStates(evs);
+    const firstPending = PHASES.findIndex(([k]) => !st[k]);
+    const doneIdx = PHASES.map(([k], i) => (st[k] === 'ok' || st[k] === 'warn') ? i : -1)
+      .filter(i => i >= 0);
+    const lastDone = doneIdx.length ? Math.max.apply(null, doneIdx) : -1;
+
+    $('pipeline-list').innerHTML = PHASES.map(([k, label], i) => {
+      const s = st[k];
+      let cls = '', sub = '等待执行';
+      if (s === 'ok') { cls = 'done'; sub = '已完成'; }
+      else if (s === 'warn') { cls = 'done'; sub = '已完成 · 有告警'; }
+      else if (s === 'failed') { cls = 'failed'; sub = '未通过'; }
+      else if (s === 'running') { cls = 'active'; sub = '正在执行'; }
+      else if (i <= lastDone) { cls = 'done'; sub = '已完成'; }
+      else if (job && job.status === 'succeeded') { cls = 'done'; sub = '已完成'; }
+      else if (job && job.status === 'running' && i === firstPending) {
+        cls = 'active nudge'; sub = '正在执行';
+      }
+      const sym = cls.indexOf('done') === 0 ? '✓'
+                : cls.indexOf('failed') === 0 ? '!'
+                : String(i + 1).padStart(2, '0');
+      return `<div class="pipe-step ${cls}" title="${esc(label)}">
+        <div class="step-number">${sym}</div>
+        <div><b>${esc(label)}</b><span>${sub}</span></div>
+      </div>`;
+    }).join('');
+
+    const pct = job ? pctOf(job, evs) : 0;
+    $('pipeline-summary').textContent = job
+      ? '当前任务：' + shortName(job.model)
+      : '等待提交任务后展示各阶段进度。';
+    $('pipe-route').textContent = job ? routeShort(job.route) : '未提交';
+    $('pipe-progress-text').textContent = job
+      ? (job.status === 'succeeded' ? '100% · 已完成' : pct + '% · ' + phaseText(job))
+      : '0%';
+    $('pipe-progress').style.width = pct + '%';
+
+    const state = $('pipeline-state');
+    if (!job) {
+      state.className = 'status-pill pending';
+      state.textContent = '待命';
+    } else {
+      const m = statusMeta(job.status);
+      state.className = 'status-pill ' + m.cls;
+      state.textContent = job.status === 'running' ? '执行中' : m.text;
+    }
+  }
+
+  /* ========== 日志渲染 ========== */
+  function logLineHTML(e) {
+    const d = new Date((e.ts || 0) * 1000);
+    const hh = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    const lv = e.status === 'failed' ? 'ERROR' : e.status === 'warn' ? 'WARN' : 'INFO';
+    const cls = e.status === 'failed' ? 'error' : e.status === 'warn' ? 'warn' : '';
+    return `<div class="log-line ${cls}"><time>${hh}</time>`
+      + `<span class="lv ${cls}">${lv}</span>`
+      + `<span class="msg">${esc(e.message || '')}</span></div>`;
+  }
+
+  function logText(events) {
+    return (events || []).map(e => {
+      const d = new Date((e.ts || 0) * 1000);
+      const hh = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+      const lv = e.status === 'failed' ? 'ERROR' : e.status === 'warn' ? 'WARN' : 'INFO';
+      return `[${hh}] ${lv} ${e.message || ''}`;
+    }).join('\n');
+  }
+
+  function appendLog(events) {
+    const box = $('log-lines');
+    if (!box) return;
+    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 24;
+    (events || []).forEach(e => box.insertAdjacentHTML('beforeend', logLineHTML(e)));
+    while (box.children.length > 500) box.removeChild(box.firstChild);
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  function renderLogPanel() {
+    const job = CUR;
+    if (!job) {
+      $('log-model').textContent = '尚未提交任务';
+      $('log-id').textContent = '—';
+      $('log-route').textContent = '—';
+      $('log-badge').className = 'status-pill pending';
+      $('log-badge').innerHTML = '<span class="bullet"></span>待命';
+      $('log-pct').textContent = '0%';
+      $('log-bar').style.width = '0%';
+      $('log-bar-wrap').classList.remove('failed');
+      $('log-bar-wrap').setAttribute('aria-valuenow', '0');
+      $('log-deliver').innerHTML = '';
+      $('log-count').textContent = '';
+      $('log-hint').textContent = '点日志行可复制该行';
+      $('log-detail').disabled = true;
+      return;
+    }
+    const evs = DETAILS[job.job_id] || [];
+    const pct = pctOf(job, evs);
+    const m = statusMeta(job.status);
+    $('log-model').textContent = job.model || '—';
+    $('log-id').textContent = job.job_id || '—';
+    $('log-route').textContent = routeText(job.route);
+    $('log-badge').className = 'status-pill ' + m.cls;
+    $('log-badge').innerHTML = '<span class="bullet"></span>' + esc(m.text);
+    $('log-pct').textContent = pct + '%';
+    $('log-bar').style.width = pct + '%';
+    $('log-bar-wrap').classList.toggle('failed', job.status === 'failed');
+    $('log-bar-wrap').setAttribute('aria-valuenow', String(pct));
+    $('log-deliver').innerHTML = job.status === 'succeeded' ? deliverRowHTML(job) : '';
+    $('log-count').textContent = evs.length ? evs.length + ' 条日志' : '';
+    $('log-hint').textContent = job.status === 'running'
+      ? 'LIVE · 每 2.5 秒刷新，点日志行可复制'
+      : job.status === 'queued' ? '排队等待空闲算力卡'
+      : '点日志行可复制该行';
+    $('log-detail').disabled = false;
+  }
+
+  /* ========== 任务列表 ========== */
+  function pagerHTML(page, pages) {
+    if (pages <= 1) return '';
+    const nums = [];
+    let last = 0;
+    for (let p = 1; p <= pages; p++) {
+      if (p === 1 || p === pages || Math.abs(p - page) <= 1) {
+        if (last && p - last > 1) nums.push('…');
+        nums.push(p);
+        last = p;
+      }
+    }
+    return '<div class="pager">'
+      + `<button type="button" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="上一页">上一页</button>`
+      + nums.map(n => n === '…'
+          ? '<span class="dots">…</span>'
+          : `<button type="button" data-page="${n}" class="${n === page ? 'on' : ''}"${n === page ? ' aria-current="page"' : ''}>${n}</button>`).join('')
+      + `<button type="button" data-page="${page + 1}" ${page >= pages ? 'disabled' : ''} aria-label="下一页">下一页</button>`
+      + '</div>';
+  }
+
+  function bindPager(el, go) {
+    el.querySelectorAll('[data-page]').forEach(b => {
+      b.addEventListener('click', () => {
+        const p = parseInt(b.dataset.page, 10);
+        if (!isNaN(p)) go(p);
+      });
+    });
+  }
+
+  function taskList() {
+    return JOBS.filter(j => {
+      if (taskFilter === 'running') return isLive(j.status);
+      if (taskFilter === 'success') return j.status === 'succeeded';
+      if (taskFilter === 'failed') return j.status === 'failed';
+      return true;
+    });
+  }
+
+  function renderTasks() {
+    const list = taskList();
+    const pages = Math.max(1, Math.ceil(list.length / TASK_PAGE));
+    taskPage = Math.min(Math.max(1, taskPage), pages);
+    const rows = list.slice((taskPage - 1) * TASK_PAGE, taskPage * TASK_PAGE);
+
+    $('task-rows').innerHTML = rows.length ? rows.map(j => {
+      const evs = DETAILS[j.job_id] || [];
+      const pct = pctOf(j, evs);
+      const cur = CUR && CUR.job_id === j.job_id ? ' current' : '';
+      return `<tr class="clickable${cur}" data-job="${esc(j.job_id)}">
+        <td><div class="model-cell">
+          <span class="model-glyph">${esc(glyph(j.model))}</span>
+          <div><strong>${esc(j.model)}</strong><small class="mono">${esc(j.job_id)}</small></div>
+        </div></td>
+        <td>${pill(j.status)}</td>
+        <td>${esc(phaseText(j))}</td>
+        <td><div class="progress-cell">
+          <div class="progress-track ${j.status === 'failed' ? 'failed' : ''}"><span style="width:${pct}%"></span></div>
+          <span class="mono">${pct}%</span>
+        </div></td>
+        <td><button class="td-action" type="button" data-open="${esc(j.job_id)}">查看详情 →</button></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="5"><div class="empty">当前筛选条件下暂无任务</div></td></tr>`;
+
+    const from = list.length ? (taskPage - 1) * TASK_PAGE + 1 : 0;
+    const to = Math.min(taskPage * TASK_PAGE, list.length);
+    $('task-foot').textContent = `显示 ${from}–${to} / ${list.length} 条任务`
+      + (JOBS.length >= 50 ? ' · 仅展示最近 50 条' : '');
+    $('task-pager').innerHTML = pagerHTML(taskPage, pages);
+    bindPager($('task-pager'), p => { taskPage = p; renderTasks(); });
+
+    const counts = { running: 0, queued: 0, succeeded: 0, failed: 0 };
+    JOBS.forEach(j => { if (j.status in counts) counts[j.status]++; });
+    $('task-summary').textContent =
+      `运行中 ${counts.running} · 排队 ${counts.queued} · 已完成 ${counts.succeeded} · 未通过 ${counts.failed}`;
+
+    $('task-rows').querySelectorAll('tr[data-job]').forEach(tr => {
+      tr.addEventListener('click', ev => {
+        const btn = ev.target.closest('[data-open]');
+        openDetail(btn ? btn.dataset.open : tr.dataset.job);
+      });
+    });
+  }
+
+  async function loadJobs() {
+    if (taskBusy) return;
+    taskBusy = true;
+    try {
+      const rows = await getJSON('/api/jobs');
+      JOBS = Array.isArray(rows) ? rows : [];
+      // 只为运行中的任务拉取阶段事件；排队任务没有进度，展示 0% 即可
+      const live = JOBS.filter(j => j.status === 'running');
+      await Promise.all(live.map(async j => {
+        try {
+          const d = await getJSON('/api/jobs/' + j.job_id);
+          DETAILS[j.job_id] = d.events || [];
+        } catch (e) { /* ignore */ }
+      }));
+      const need = JOBS.filter(j => j.status === 'failed' && !DETAILS[j.job_id])
+        .map(j => j.job_id).slice(0, 20);
+      await Promise.all(need.map(async id => {
+        try {
+          const d = await getJSON('/api/jobs/' + id);
+          DETAILS[id] = d.events || [];
+        } catch (e) { DETAILS[id] = []; }
+      }));
+      if (!autoFocused && JOBS.length) {
+        autoFocused = true;
+        const pick = JOBS.find(j => j.status === 'running')
+          || JOBS.find(j => j.status === 'queued') || JOBS[0];
+        focusJob(pick.job_id);
+      }
+      renderTasks();
+      renderStats();
+    } catch (e) { /* 保留旧数据 */ }
+    finally { taskBusy = false; }
+  }
+
+  /* ========== 关注某个任务（日志面板跟随） ========== */
+  async function focusJob(id) {
+    if (!id) return;
+    try {
+      const d = await getJSON('/api/jobs/' + id);
+      const j = d.job || {};
+      const evs = d.events || [];
+      DETAILS[id] = evs;
+      CUR = Object.assign({}, j);
+      CUR_SEQ = evs.length ? Math.max.apply(null, evs.map(e => e.seq || 0)) : 0;
+      $('log-lines').innerHTML = '';
+      if (evs.length) {
+        appendLog(evs);
+        $('log-lines').scrollTop = $('log-lines').scrollHeight;
+      }
+      renderPipeline();
+      renderLogPanel();
+      renderTasks();
+      if (isTerminal(j.status)) stopPolling(); else startPolling();
+    } catch (e) {
+      toast('任务详情加载失败：' + e.message);
+    }
+  }
+
+  /* ========== 轮询当前任务 ========== */
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(tick, 2500);
+  }
+  function stopPolling() {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  async function tick() {
+    if (!CUR) return;
+    try {
+      const d = await getJSON('/api/jobs/' + CUR.job_id);
+      const j = d.job || {};
+      const evs = d.events || [];
+      const prev = CUR.status;
+      DETAILS[j.job_id] = evs;
+      CUR = Object.assign({}, CUR, j);
+      const fresh = evs.filter(e => (e.seq || 0) > CUR_SEQ);
+      if (fresh.length) {
+        CUR_SEQ = Math.max.apply(null, fresh.map(e => e.seq || 0));
+        appendLog(fresh);
+      }
+      renderPipeline();
+      renderLogPanel();
+      renderTasks();
+      if ($('detail-modal').classList.contains('show') && modalJobId === CUR.job_id) {
+        fillModal(CUR, evs);
+      }
+      if (isTerminal(CUR.status) && prev !== CUR.status) {
+        stopPolling();
+        toast(CUR.status === 'succeeded' ? '迁移完成，可下载交付包' : '迁移未通过，详见执行日志');
+        loadJobs();
+        loadCorpus();
+        loadDeliverables();
+      }
+    } catch (e) { /* 网络抖动时等下一轮 */ }
+  }
+
+  /* ========== 详情弹窗 ========== */
+  function fillModal(job, evs) {
+    if (!job) return;
+    modalJobId = job.job_id;
+    const st = stageStates(evs);
+    const doneIdx = PHASES.map(([k], i) => (st[k] === 'ok' || st[k] === 'warn') ? i : -1)
+      .filter(i => i >= 0);
+    const lastDone = doneIdx.length ? Math.max.apply(null, doneIdx) : -1;
+    const pct = pctOf(job, evs);
+    $('modal-title').textContent = job.model || '迁移任务';
+    $('modal-id').textContent = (job.job_id || '') +
+      (job.created_at ? ' · 创建于 ' + fmtTime(job.created_at) : '');
+    $('modal-status').textContent = statusMeta(job.status).cn;
+    $('modal-phase').textContent = phaseText(job);
+    $('modal-progress').textContent = pct + '%';
+    $('modal-route').textContent = routeText(job.route);
+
+    $('modal-steps').innerHTML = PHASES.map(([k, label], i) => {
+      const s = st[k];
+      let cls = '';
+      if (s === 'ok' || s === 'warn') cls = 'done';
+      else if (s === 'failed') cls = 'failed';
+      else if (s === 'running') cls = 'active';
+      else if (i <= lastDone) cls = 'done';
+      else if (job.status === 'succeeded') cls = 'done';
+      return `<div class="modal-step ${cls}" title="${esc(label)}"></div>`;
+    }).join('');
+
+    const err = $('modal-error');
+    if (job.error) {
+      err.hidden = false;
+      err.innerHTML = `<b>失败原因</b>${esc(job.error)}`;
+    } else {
+      err.hidden = true;
+      err.textContent = '';
+    }
+
+    $('modal-logs').innerHTML = evs.length
+      ? evs.map(logLineHTML).join('')
+      : '<div class="log-empty">暂无日志</div>';
+    $('modal-logs').scrollTop = $('modal-logs').scrollHeight;
+    $('modal-deliver').innerHTML = job.status === 'succeeded' ? deliverRowHTML(job) : '';
+  }
+
+  async function openDetail(id) {
+    if (!id) return;
+    try {
+      let j = JOBS.find(x => x.job_id === id) || null;
+      if (!j || !DETAILS[id]) {
+        const d = await getJSON('/api/jobs/' + id);
+        j = d.job || j;
+        DETAILS[id] = d.events || [];
+      }
+      if (!j) return;
+      if (!CUR || CUR.job_id !== id) await focusJob(id);
+      fillModal(j, DETAILS[id] || []);
+      $('detail-modal').classList.add('show');
+      document.body.style.overflow = 'hidden';
+      $('close-modal').focus();
+    } catch (e) {
+      toast('任务详情加载失败：' + e.message);
+    }
+  }
+
+  function closeDetail() {
+    $('detail-modal').classList.remove('show');
+    document.body.style.overflow = '';
+    modalJobId = null;
+  }
+
+  /* ========== 语料库 ========== */
+  function renderTaxonomy() {
+    // 只统计成功迁移的样本：分子分母都是已迁移数，不把失败样本算进来
+    const items = ((CORPUS && CORPUS.items) || []).filter(x => x.status === 'migrated');
+    const agg = {};
+    items.forEach(x => {
+      const a = agg[x.category] || (agg[x.category] = { ok: 0, n: 0 });
+      a.ok++;
+      a.n++;
+    });
+    const order = CAT_ORDER.filter(k => agg[k]);
+    Object.keys(agg).forEach(k => { if (order.indexOf(k) < 0) order.push(k); });
+
+    $('taxonomy').innerHTML = order.map(k => {
+      const a = agg[k];
+      const rate = a.n ? Math.round(a.ok * 100 / a.n) : 0;
+      const color = CAT_COLOR[k] || 'var(--brand)';
+      return `<button class="taxonomy-item" type="button" data-category="${esc(k)}"
+          style="--barcolor:${color}" title="只看 ${esc(CAT_CN[k] || k)}">
+        <div class="taxonomy-top"><span>${esc(CAT_CN[k] || k)}</span><strong>${rate}%</strong></div>
+        <div class="taxonomy-note">${a.ok} / ${a.n} 个适配样本</div>
+        <div class="bar"><span style="width:${rate}%"></span></div>
+      </button>`;
+    }).join('') || '<div class="empty" style="grid-column:1/-1">暂无分类数据</div>';
+
+    const catLabel = $('model-category-count');
+    if (catLabel) catLabel.textContent = `模型类别：${order.length}`;
+
+    $('category-nav').innerHTML = order.map(k => {
+      const a = agg[k];
+      return `<button class="side-link side-cat" type="button" data-category="${esc(k)}">
+        <span>${esc(CAT_CN[k] || k)}</span><span class="count">${a.n}</span></button>`;
+    }).join('');
+
+    $('taxonomy').querySelectorAll('[data-category]').forEach(b => {
+      b.addEventListener('click', () => filterCategory(b.dataset.category));
+    });
+    $('category-nav').querySelectorAll('[data-category]').forEach(b => {
+      b.addEventListener('click', () => { filterCategory(b.dataset.category); closeMenu(); });
+    });
+  }
+
+  function filterCategory(key) {
+    covCat = key;
+    covPage = 1;
+    $('catalog-category').value = key;
+    renderCatalog();
+    $('corpus').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderCatalog() {
+    const all = ((CORPUS && CORPUS.items) || []).filter(x => x.status === 'migrated');
+    let list = all.slice();
+    if (covCat !== 'all') list = list.filter(x => x.category === covCat);
+    const q = (covQ || '').trim().toLowerCase();
+    if (q) {
+      list = list.filter(x => (String(x.model) + ' ' + (CAT_CN[x.category] || '') + ' '
+        + (x.route || '') + ' ' + (x.family || '')).toLowerCase().includes(q));
+    }
+    if (covSort === 'default') {
+      // 按分类分组（顺序与上方分类卡一致），组内保持清单原顺序
+      const rank = c => { const i = CAT_ORDER.indexOf(c); return i < 0 ? 99 : i; };
+      list.sort((a, b) => rank(a.category) - rank(b.category));
+    }
+    if (covSort === 'name') list.sort((a, b) => a.model.localeCompare(b.model));
+    if (covSort === 'size') list.sort((a, b) => (b.gb || 0) - (a.gb || 0));
+
+    const pages = Math.max(1, Math.ceil(list.length / COV_PAGE));
+    covPage = Math.min(Math.max(1, covPage), pages);
+    const rows = list.slice((covPage - 1) * COV_PAGE, covPage * COV_PAGE);
+
+    $('catalog-rows').innerHTML = rows.length ? rows.map(x => `
+      <tr>
+        <td><div class="model-cell">
+          <span class="model-glyph">${esc(glyph(x.model))}</span>
+          <div><strong>${esc(x.model)}</strong><small>${esc(x.family || '已适配 · 经验样本')}</small></div>
+        </div></td>
+        <td><span class="category-badge">${esc(CAT_CN[x.category] || x.category || '—')}</span></td>
+        <td><span class="split-badge">${esc(x.split || '—')}</span></td>
+        <td class="mono">${x.gb != null ? x.gb.toFixed(3) + 'G' : '—'}</td>
+        <td><span class="status-pill success"><span class="bullet"></span>已迁移</span></td>
+        <td class="mono">${esc(x.route || '已验证')}</td>
+      </tr>`).join('')
+      : '<tr><td colspan="6"><div class="empty">没有匹配的模型，请尝试其他关键词或分类。</div></td></tr>';
+
+    const from = list.length ? (covPage - 1) * COV_PAGE + 1 : 0;
+    const to = Math.min(covPage * COV_PAGE, list.length);
+    const filtered = covCat !== 'all' || !!q;
+    $('catalog-summary').textContent = `显示 ${from}–${to} / ${list.length} 个已迁移模型`
+      + (filtered ? `（全库 ${all.length} 个已迁移样本）` : '');
+    $('catalog-pager').innerHTML = pagerHTML(covPage, pages);
+    bindPager($('catalog-pager'), p => { covPage = p; renderCatalog(); });
+  }
+
+  async function loadCorpus() {
+    try {
+      const r = await getJSON('/api/corpus');
+      CORPUS = r || {};
+      if (!Array.isArray(CORPUS.items)) CORPUS.items = [];
+      if (typeof CORPUS.total !== 'number') CORPUS.total = CORPUS.items.length;
+      renderTaxonomy();
+      renderCatalog();
+      renderStats();
+    } catch (e) {
+      $('catalog-rows').innerHTML =
+        `<tr><td colspan="6"><div class="empty">语料库加载失败：${esc(e.message)}</div></td></tr>`;
+    }
+  }
+
+  /* ========== 交付产物 ========== */
+  function bytes(n) {
+    if (!n) return '—';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+    return (n / 1024 / 1024).toFixed(1) + ' MB';
+  }
+
+  function renderDeliverables() {
+    const q = (delivQ || '').trim().toLowerCase();
+    const list = DELIV.filter(d => !q || String(d.package).toLowerCase().includes(q));
+    const pages = Math.max(1, Math.ceil(list.length / DELIV_PAGE));
+    delivPage = Math.min(Math.max(1, delivPage), pages);
+    const rows = list.slice((delivPage - 1) * DELIV_PAGE, delivPage * DELIV_PAGE);
+
+    $('deliv-rows').innerHTML = rows.length ? rows.map(d => {
+      const docs = [];
+      if (d['DEPLOY.md']) docs.push('部署');
+      if (d['TEST_REPORT.md']) docs.push('测试');
+      if (d['ADAPTATION.md']) docs.push('根因');
+      const ok = String(d.verdict || '').toUpperCase() === 'PASS';
+      return `<tr>
+        <td><b>${esc(d.package)}</b>
+          ${d.arch ? `<div class="mono">${esc(d.arch)}</div>` : ''}</td>
+        <td class="deliv-docs">${docs.length ? docs.map(x => `<b>${x}</b>`).join(' · ') : '—'}</td>
+        <td class="mono">${bytes(d.size)}</td>
+        <td><span class="verdict${ok ? '' : ' bad'}">${esc(d.verdict || '—')}</span></td>
+        <td class="dl-cell">
+          <a class="dl-btn" href="/api/download?package=${encodeURIComponent(d.package)}" download>
+            ${ico('download')} tar</a>
+          ${d['PERF_REPORT.md'] ? `<a class="dl-btn ghost" target="_blank"
+            href="/api/artifact?package=${encodeURIComponent(d.package)}&name=PERF_REPORT.md">性能</a>` : ''}
+          ${d['weights_image.json'] ? `<button class="dl-btn ghost" type="button"
+            data-img="${esc(d.package)}">镜像</button>` : ''}
+        </td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="5"><div class="empty">没有匹配的交付包</div></td></tr>';
+
+    $('deliv-count').textContent = DELIV.length || '—';
+    $('deliv-summary').textContent = `${list.length} / ${DELIV.length} 个交付包`;
+    $('deliv-foot').textContent = `显示 ${DELIV.length ? (delivPage - 1) * DELIV_PAGE + 1 : 0}–`
+      + `${Math.min(delivPage * DELIV_PAGE, list.length)} / ${list.length} 个交付包`;
+    $('deliv-pager').innerHTML = pagerHTML(delivPage, pages);
+    bindPager($('deliv-pager'), p => { delivPage = p; renderDeliverables(); });
+  }
+
+  async function loadDeliverables() {
+    try {
+      const d = await getJSON('/api/deliveries');
+      DELIV = Array.isArray(d.items) ? d.items : [];
+      DELIV.sort((a, b) => a.package.localeCompare(b.package));
+      renderDeliverables();
+      renderStats();
+    } catch (e) {
+      $('deliv-rows').innerHTML =
+        `<tr><td colspan="5"><div class="empty">交付清单加载失败：${esc(e.message)}</div></td></tr>`;
+    }
+  }
+
+  /* ========== 算力容量 ========== */
+  function renderCapacity() {
+    if (!CAP) return;
+    const total = CAP.total || 0, free = CAP.free != null ? CAP.free : 0;
+    const busy = CAP.in_use || 0, queued = CAP.queued || 0;
+    $('cap-text').textContent = `空闲 ${free} / ${total} 卡`;
+    $('cap-chip-text').innerHTML = `算力 <b>${busy}/${total}</b> 卡在用 · 空闲 ${free}`
+      + (queued ? ` · 排队 ${queued}` : '');
+    $('cap-note').textContent = `算力 ${busy}/${total} 卡在用`;
+    $('engine-state').textContent = free > 0 ? '● 就绪' : '● 满载';
+    const wsCap = $('ws-cap');
+    if (wsCap) wsCap.textContent = `${free} / ${total} 卡`;
+  }
+
+  async function loadCapacity() {
+    try {
+      CAP = await getJSON('/api/capacity');
+      renderCapacity();
+    } catch (e) { /* ignore */ }
+  }
+
+  /* ========== 提交迁移 ========== */
+  const BATCH = [
+    'AI-ModelScope/t5-small',
+    'AI-ModelScope/roberta-base',
+    'google/electra-small-discriminator',
+    'OpenGVLab/pvt_v2_b0',
+    'google/electra-small-generator'
+  ];
+
+  function parseModels(text) {
+    return [...new Set(String(text || '')
+      .split(/[\n\r,，;；]+/)
+      .flatMap(x => x.split(/\s{2,}/))
+      .map(x => x.trim())
+      .filter(x => x && x.includes('/') && !/\s/.test(x)))].slice(0, 50);
+  }
+
+  function updateCounter() {
+    const n = parseModels($('model-input').value).length;
+    $('model-counter').textContent = n + ' 个模型';
+  }
+
+  function autoGrow() {
+    const t = $('model-input');
+    t.style.height = 'auto';
+    t.style.height = Math.min(t.scrollHeight, 190) + 'px';
+  }
+
+  function formError(msg) {
+    $('form-error').textContent = msg || '';
+  }
+
+  async function submitMigration() {
+    const models = parseModels($('model-input').value);
+    if (!models.length) {
+      formError('请至少输入一个模型（格式 org/name）');
+      $('model-input').focus();
+      return;
+    }
+    if (models.length > 50) {
+      formError('一次最多提交 50 个模型');
+      return;
+    }
+    formError('');
+    const btn = $('start-btn');
+    btn.disabled = true;
+    $('form-state').className = 'status-pill running';
+    $('form-state').textContent = '提交中';
+    try {
+      const r = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ models })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.job_id) throw new Error(d.error || ('HTTP ' + r.status));
+      $('model-input').value = '';
+      autoGrow();
+      updateCounter();
+      $('form-state').className = 'status-pill success';
+      $('form-state').textContent = d.count > 1 ? `已提交 ${d.count} 个` : '已提交';
+      toast(d.count > 1 ? `已提交 ${d.count} 个迁移任务，自动并行排队` : '迁移任务已提交');
+      await loadJobs();
+      const first = (d.jobs && d.jobs[0] && d.jobs[0].job_id) || d.job_id;
+      await focusJob(first);
+      $('migrate').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      formError('提交失败：' + e.message);
+      $('form-state').className = 'status-pill failed';
+      $('form-state').textContent = '提交失败';
+      toast('提交失败');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /* ========== 主题 / 移动端导航 ========== */
+  const THEME_KEY = 'mb-theme';
+  function applyTheme(dark) {
+    document.body.classList.toggle('dark', !!dark);
+    $('theme-btn').innerHTML = ico(dark ? 'sun' : 'moon');
+    try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+  }
+  function initTheme() {
+    let saved = null;
+    try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* ignore */ }
+    const dark = saved ? saved === 'dark'
+      : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    applyTheme(dark);
+  }
+
+  function toggleWorkspace(open) {
+    const btn = $('workspace-btn'), pop = $('workspace-pop');
+    if (!btn || !pop) return;
+    const show = open === undefined ? !pop.classList.contains('show') : !!open;
+    pop.classList.toggle('show', show);
+    btn.setAttribute('aria-expanded', String(show));
+  }
+
+  function closeMenu() {
+    $('sidebar').classList.remove('open');
+    $('overlay').classList.remove('show');
+    $('menu-btn').setAttribute('aria-expanded', 'false');
+    toggleWorkspace(false);
+  }
+
+  /* ========== 时间格式 ========== */
+  function fmtTime(ts) {
+    if (!ts) return '—';
+    const d = new Date(ts * 1000);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} `
+      + `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  /* ========== 事件绑定 ========== */
+  $('migration-form').addEventListener('submit', ev => {
+    ev.preventDefault();
+    submitMigration();
+  });
+
+  $('model-input').addEventListener('keydown', ev => {
+    if (ev.isComposing || ev.keyCode === 229) return;
+    if (ev.key === 'Enter' && !ev.shiftKey) {
+      ev.preventDefault();
+      $('migration-form').requestSubmit();
+    }
+  });
+  $('model-input').addEventListener('input', () => { autoGrow(); updateCounter(); });
+
+  document.querySelectorAll('[data-example]').forEach(b => {
+    b.addEventListener('click', () => {
+      const v = b.dataset.example;
+      const cur = $('model-input').value.trim();
+      $('model-input').value = cur ? cur + '\n' + v : v;
+      autoGrow();
+      updateCounter();
+      $('model-input').focus();
+    });
+  });
+  document.querySelectorAll('[data-batch]').forEach(b => {
+    b.addEventListener('click', () => {
+      const cur = $('model-input').value.trim();
+      $('model-input').value = cur ? cur + '\n' + BATCH.join('\n') : BATCH.join('\n');
+      autoGrow();
+      updateCounter();
+      $('model-input').focus();
+    });
+  });
+
+  $('task-tabs').addEventListener('click', ev => {
+    const b = ev.target.closest('[data-filter]');
+    if (!b) return;
+    taskFilter = b.dataset.filter;
+    taskPage = 1;
+    $('task-tabs').querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === b));
+    renderTasks();
+  });
+
+  $('task-refresh').addEventListener('click', () => {
+    toast('正在刷新…');
+    Promise.all([loadJobs(), loadCorpus(), loadDeliverables()])
+      .then(() => toast('已刷新任务、语料库与交付清单'));
+    loadCapacity();
+  });
+
+  $('catalog-search').addEventListener('input', () => {
+    covQ = $('catalog-search').value;
+    covPage = 1;
+    renderCatalog();
+  });
+  $('catalog-category').addEventListener('change', () => {
+    covCat = $('catalog-category').value;
+    covPage = 1;
+    renderCatalog();
+  });
+  $('catalog-sort').addEventListener('change', () => {
+    covSort = $('catalog-sort').value;
+    covPage = 1;
+    renderCatalog();
+  });
+
+  $('deliv-search').addEventListener('input', () => {
+    delivQ = $('deliv-search').value;
+    delivPage = 1;
+    renderDeliverables();
+  });
+
+  $('log-copy').addEventListener('click', () => {
+    if (!CUR) { toast('还没有可复制的日志'); return; }
+    copyText(logText(DETAILS[CUR.job_id] || []));
+  });
+  $('log-detail').addEventListener('click', () => {
+    if (CUR) openDetail(CUR.job_id);
+  });
+  $('modal-copy').addEventListener('click', () => {
+    if (modalJobId) copyText(logText(DETAILS[modalJobId] || []));
+  });
+
+  ['log-lines', 'modal-logs'].forEach(id => {
+    $(id).addEventListener('click', ev => {
+      const line = ev.target.closest('.log-line');
+      if (!line) return;
+      const msg = line.querySelector('.msg');
+      if (msg && msg.textContent.trim()) copyText(msg.textContent.trim());
+    });
+  });
+
+  $('close-modal').addEventListener('click', closeDetail);
+  $('detail-modal').addEventListener('click', ev => {
+    if (ev.target === $('detail-modal')) closeDetail();
+  });
+
+  $('theme-btn').addEventListener('click', () => {
+    const dark = !document.body.classList.contains('dark');
+    applyTheme(dark);
+    toast(dark ? '已切换深色模式' : '已切换浅色模式');
+  });
+
+  $('menu-btn').addEventListener('click', () => {
+    const open = !$('sidebar').classList.contains('open');
+    $('sidebar').classList.toggle('open', open);
+    $('overlay').classList.toggle('show', open);
+    $('menu-btn').setAttribute('aria-expanded', String(open));
+  });
+  $('overlay').addEventListener('click', closeMenu);
+
+  /* 工作空间卡片：点击展开信息面板 */
+  $('workspace-btn').addEventListener('click', ev => {
+    ev.stopPropagation();
+    toggleWorkspace();
+  });
+  $('workspace-pop').addEventListener('click', ev => ev.stopPropagation());
+  $('ws-pop-link').addEventListener('click', () => {
+    toggleWorkspace(false);
+    const nav = document.querySelector('[data-nav="tasks"]');
+    if (nav) activateNav(nav);
+  });
+  document.addEventListener('click', () => toggleWorkspace(false));
+
+  function activateNav(nav) {
+    document.querySelectorAll('[data-nav]').forEach(x => {
+      x.classList.toggle('active', x === nav);
+      if (x === nav) x.setAttribute('aria-current', 'page');
+      else x.removeAttribute('aria-current');
+    });
+    if (nav.dataset.crumb) $('page-crumb').textContent = nav.dataset.crumb;
+    closeMenu();
+  }
+
+  document.querySelectorAll('[data-nav]').forEach(a => {
+    a.addEventListener('click', () => activateNav(a));
+  });
+
+  $('global-search').addEventListener('click', () => {
+    $('corpus').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => $('catalog-search').focus(), 260);
+  });
+
+  document.addEventListener('keydown', ev => {
+    if ((ev.ctrlKey || ev.metaKey) && String(ev.key).toLowerCase() === 'k') {
+      ev.preventDefault();
+      $('global-search').click();
+    }
+    if (ev.key === 'Escape') {
+      toggleWorkspace(false);
+      if ($('detail-modal').classList.contains('show')) closeDetail();
+      else closeMenu();
+    }
+  });
+
+  /* ========== 启动 ========== */
+  initTheme();
+  renderPipeline();
+  renderLogPanel();
+  renderStats();
+  renderTasks();
+  renderCatalog();
+  renderDeliverables();
+  loadPhases();
+  loadJobs();
+  loadCorpus();
+  loadDeliverables();
+  loadCapacity();
+  setInterval(loadJobs, 5000);
+  setInterval(loadCapacity, 8000);
+  setInterval(loadDeliverables, 60000);
+})();
+</script>
+</body>
+</html>

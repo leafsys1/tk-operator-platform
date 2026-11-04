@@ -1,0 +1,5 @@
+#!/bin/sh
+# CANNBot provider adapter for the bundled DSH runtime.
+set -eu
+op_agent_root="${OPX_REPO_ROOT:?OPX_REPO_ROOT is required}"
+exec "$op_agent_root/backend/.venv/bin/python" "$op_agent_root/scripts/cannbot_dsh_launcher.py" "$@"

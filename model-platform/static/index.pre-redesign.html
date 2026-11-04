@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ModelBridge · 一键模型迁移</title>
+<link rel="stylesheet" href="/static/preview.css">
+<style>
+/* ---- 补充样式：沿用预览的设计令牌（--green/--ink/--line/--canvas/--radius）---- */
+.pill{display:inline-block;font-size:11.5px;padding:1.5px 7px;border-radius:99px;line-height:1.6}
+.pill.ok{background:#e8f5ec;color:var(--green)}
+.pill.warn{background:#fdf3e3;color:var(--amber)}
+.pill.bad{background:#fdeceb;color:#b3261e}
+.pill.info{background:var(--green-soft);color:var(--green)}
+.mb-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.mb-table th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;
+  padding:8px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:1}
+.mb-table td{padding:8px 10px;border-bottom:1px solid #f2f5f2;vertical-align:top}
+.mb-table tr:hover td{background:#fafcfa}
+.mb-table .mono{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.tbl-scroll{max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:11px}
+.bk{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--green-soft);color:var(--green)}
+.bk.A{background:#eef4fb;color:#1c5b9e}.bk.B{background:#f0f7f1;color:#2f7d4f}
+.bk.C{background:#fdf3e3;color:var(--amber)}.bk.D{background:#f4f0fa;color:#6b4fa0}
+.bk.E{background:#fdeceb;color:#b3261e}
+.mb-meter{display:flex;height:9px;border-radius:99px;overflow:hidden;background:#eef2ee;margin:8px 0}
+.mb-meter i{display:block;height:100%}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:11px;margin:4px 0 12px}
+.cmp .box{border:1px solid var(--line);border-radius:11px;padding:14px 16px;background:#fff}
+.cmp .box .k{font-size:12px;color:var(--muted);margin-bottom:6px}
+.cmp .box .v{font-size:26px;font-weight:700;line-height:1.1;color:var(--ink)}
+.cmp .box.fast{border-color:#bfe0cb;background:#f4fbf6}.cmp .box.fast .v{color:var(--green)}
+.cmp .box.slow{border-color:#f0dcb4;background:#fffbf3}.cmp .box.slow .v{color:var(--amber)}
+.cmp .box .sub{font-size:12px;color:var(--muted);margin-top:5px}
+.diag-r{border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-top:9px;background:#fff}
+.diag-r .hd{display:flex;gap:9px;align-items:center;margin-bottom:7px;flex-wrap:wrap}
+.diag-r .sm{font-size:13px;color:var(--ink);line-height:1.6}
+.diag-r .rc{font-size:12.5px;color:var(--muted);margin-top:5px}
+.diag-r .dr{font-size:13px;color:var(--green);margin-top:6px;line-height:1.6}
+.diag-r .cs{font-size:12px;color:var(--muted);margin-top:6px;font-style:italic}
+  font-family:var(--mono);font-size:12.5px;line-height:1.6;color:var(--ink);resize:vertical;background:#fcfdfc;outline:none}
+.caveat{background:#fffbf3;border:1px solid #f0dcb4;border-radius:10px;padding:10px 13px;
+  font-size:12.5px;color:var(--amber);margin-top:11px;line-height:1.65}
+.sec-note{font-size:12.5px;color:var(--muted);line-height:1.65}
+.filter-bar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:11px;align-items:center}
+.filter-bar button{font-size:12px;padding:5px 12px;border-radius:99px;border:1px solid var(--line);
+  background:#fff;color:var(--muted);cursor:pointer;transition:.15s}
+.filter-bar button:hover{border-color:var(--green);color:var(--green)}
+.filter-bar button.on{background:var(--green);border-color:var(--green);color:#fff}
+/* ---- 交付产物下载 ---- */
+.panel-sub{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.deliv-search{margin:12px 0 10px}
+.deliv-search input{width:100%;max-width:380px;border:1px solid var(--line);border-radius:9px;
+  padding:8px 11px;font-size:12.5px;background:#fff;color:var(--ink)}
+.deliv-search input:focus{outline:none;border-color:var(--green)}
+.dl-btn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--green);
+  background:#fff;color:var(--green);border-radius:8px;padding:5px 11px;font-size:12px;
+  cursor:pointer;font-weight:600;transition:.15s;text-decoration:none;white-space:nowrap}
+.dl-btn:hover{background:var(--green);color:#fff}
+.dl-btn svg{width:13px;height:13px}
+.deliv-docs{font-size:11.5px;color:var(--muted)}
+.deliv-docs b{color:var(--ink);font-weight:600}
+  /* ---- 任务完成后的交付包下载条 ---- */
+  .job-deliver{margin:14px 0 4px}
+  .jd-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    border:1px solid var(--green);background:#f3faf5;border-radius:11px;padding:12px 15px}
+  .jd-info{display:flex;flex-direction:column;gap:3px;flex:1;min-width:220px}
+  .jd-info b{font-size:13px;color:var(--green);font-weight:700}
+  .jd-name{font-size:12px;color:var(--muted)}
+  .jd-btn{padding:8px 16px;font-size:13px;background:var(--green);color:#fff}
+  .jd-btn:hover{background:#0f3d20;color:#fff}
+.exp-bar{display:flex;gap:8px;flex-wrap:wrap;margin:11px 0 2px}
+.exp-bar .c{border:1px solid var(--line);border-radius:99px;padding:5px 12px;font-size:12px;
+  background:#fff;display:flex;gap:7px;align-items:center}
+.exp-bar .c b{font-weight:700}
+.exp-bar .c.good b{color:#155029}.exp-bar .c.mid b{color:#7a4a0c}.exp-bar .c.bad b{color:#8f2d18}
+.exp-bar .c.dim{opacity:.55}
+/* ---- 并发任务队列 ---- */
+  .q-list{display:flex;flex-direction:column;gap:9px;margin-top:6px}
+  .q-item{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    border:1px solid var(--line);border-radius:10px;padding:10px 13px;background:#fff;
+    cursor:pointer;transition:.15s}
+  .q-item:hover{border-color:var(--green);background:#f8fcf9}
+  .q-item.active{border-color:var(--green);background:#f3faf5}
+  .q-name{flex:1;min-width:200px;font-size:13px;font-weight:600}
+  .q-name small{display:block;font-weight:400;font-size:11.5px;color:var(--muted);margin-top:2px}
+  .q-phase{font-size:12px;color:var(--muted);min-width:96px}
+  .q-bar{width:130px;height:6px;border-radius:99px;background:var(--line);overflow:hidden;flex:none}
+  .q-bar i{display:block;height:100%;background:var(--green);transition:width .4s}
+  .q-pct{font-size:12px;font-weight:700;color:var(--green);min-width:38px;text-align:right}
+  .q-badge{font-size:11px;padding:2px 8px;border-radius:99px;white-space:nowrap}
+  .q-badge.running{background:#eef4ff;color:#1f4f9e}
+  .q-badge.queued{background:#f4f4f5;color:#666}
+  .q-badge.ok{background:#e8f5ec;color:var(--green)}
+  .q-badge.bad{background:#fdeceb;color:#b3261e}
+
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+<button class="nav-backdrop" id="navBackdrop" aria-label="关闭导航" hidden></button>
+
+<!-- ======================= 侧边栏（保留预览设计） ======================= -->
+<aside class="sidebar" id="sidebar" aria-label="工作空间导航">
+  <a class="brand" href="#top" aria-label="ModelBridge 首页">
+    <span class="brand-symbol" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 24V13a6 6 0 0 1 12 0v11M15 24V13a6 6 0 0 1 12 0v11" stroke="currentColor" stroke-width="3"></path><path d="M4 24h24" stroke="currentColor" stroke-width="2"></path></svg></span>
+    <span>ModelBridge</span>
+  </a>
+  <div class="workspace-picker"><span class="workspace-initial">M</span><div>默认工作空间<small>小模型迁移计划</small></div><span class="picker-mark">⌄</span></div>
+
+  <span class="nav-label">工作空间</span>
+  <nav class="main-nav" id="mainNav">
+    <a class="nav-item active" href="#top" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+      <span>迁移工作台</span></a>
+    <a class="nav-item" href="#corpus">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"></path><path d="M4 9h16M9 9v10"></path></svg>
+      <span>语料库</span><span class="nav-count" id="navCorpus">—</span></a>
+  </nav>
+
+  <div class="nav-divider"></div>
+  <span class="nav-label">模型分类</span>
+  <nav class="category-nav" id="categoryNav" aria-label="魔搭模型分类"></nav>
+
+  <div class="sidebar-bottom">
+    <div class="sidebar-version">ModelBridge</div>
+  </div>
+</aside>
+
+<!-- ======================= 主区 ======================= -->
+<div class="app-shell">
+  <header class="topbar">
+    <div class="breadcrumb">
+      <button class="icon-button mobile-menu" id="menuButton" aria-label="打开导航" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
+      <span>工作空间</span><span class="breadcrumb-slash">/</span><strong id="pageCrumb">迁移工作台</strong>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <div class="page-intro">
+      <div><h1>迁移工作台</h1><p>输入模型名称，让迁移的每一步都清晰可见。</p></div>
+    </div>
+
+    <!-- ---------- ① 提交区 ---------- -->
+    <section class="migration-hero" id="top">
+      <div class="hero-top">
+        <div class="hero-copy">
+          <span class="eyebrow">MODEL MIGRATION, SIMPLIFIED</span>
+          <span class="hero-badge">BUILT FOR ASCEND</span>
+          <h2>从模型名称，<br>到<em>可运行交付。</em></h2>
+          <p>自动评估、逐步适配、独立验证。迁移过程，一目了然。</p>
+        </div>
+      </div>
+      <form class="migration-form" id="migrationForm" autocomplete="off">
+        <label class="sr-only" for="modelInput">模型名称或官方仓库 ID</label>
+        <div class="migration-input-wrap">
+          <span class="input-search-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 4.5 4.5"></path></svg></span>
+          <textarea id="modelInput" name="model_name" rows="1" spellcheck="false"
+            placeholder="输入模型名称，支持一次多个（每行一个，或用逗号/空格分隔）&#10;例如：&#10;AI-ModelScope/gpt2&#10;google/electra-small-discriminator&#10;OpenGVLab/pvt_v2_b0"></textarea>
+          <button class="button button-primary" id="startButton" type="submit">开始迁移
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15m-5-5 5 5-5 5"></path></svg></button>
+        </div>
+        <span class="input-count" id="inputCount" hidden></span>
+        <p class="input-hint">
+          多个模型：<b>每行一个</b>，或用逗号 / 空格分隔；也可直接粘魔搭链接。
+          <kbd>Enter</kbd> 提交，<kbd>Shift+Enter</kbd> 换行。
+        </p>
+        <div class="input-bottom">
+          <div class="examples"><span>试试这些：</span>
+            <button class="example-chip" type="button" data-name="Qwen/Qwen2.5-0.5B-Instruct">Qwen2.5-0.5B</button>
+            <button class="example-chip" type="button" data-name="BAAI/bge-small-zh-v1.5">bge-small-zh</button>
+            <button class="example-chip" type="button" data-name="microsoft/wavlm-base-plus">wavlm-base</button>
+            <button class="example-chip" type="button" data-name="AI-ModelScope/YOLO11">YOLO11</button>
+            <button class="example-chip" type="button" data-batch="1">批量 5 个示例</button>
+          </div>
+          <span class="target-note">TARGET · ASCEND 910B</span>
+        </div>
+        <div id="expBar" class="exp-bar"></div>
+        <p class="match-message" id="modelMatch">① 完整匹配走复用；② 只有同家族经验则参考已有方案；③ 首次迁移按全流程探路。</p>
+        <p class="form-error" id="formError" role="alert"></p>
+      </form>
+    </section>
+
+    <!-- ---------- ② 并发任务队列 ---------- -->
+    <section class="panel" id="queuePanel" style="margin-top:18px" hidden>
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>
+          <h2>并发任务</h2>
+        </div>
+        <span class="mini-label" id="queueSum">—</span>
+      </div>
+      <div class="q-list" id="queueList"></div>
+    </section>
+
+    <!-- ---------- ③ 当前迁移（实时阶段可视化）---------- -->
+    <section class="panel" id="jobPanel" style="margin-top:18px">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8a8 8 0 0 0-14-3L3 8m0-5v5h5m-4 8a8 8 0 0 0 14 3l3-3m0 5v-5h-5"></path></svg>
+          <h2>当前迁移</h2>
+        </div>
+        <span class="mini-label">每一步都有迹可循</span>
+      </div>
+      <div id="jobContent" class="job-body">
+        <div class="empty-job-top">
+          <div><div class="job-model" id="jobModel">尚未提交任务</div>
+            <div class="job-meta"><span class="mono" id="jobId">—</span><span>·</span><span id="jobRoute">—</span></div></div>
+          <span class="job-badge" id="jobBadge"><i class="status-dot"></i>待命</span>
+        </div>
+        <div class="job-progress-head"><span id="jobPhase">等待任务</span><strong id="jobPct">0%</strong></div>
+        <div class="progress-track" role="progressbar" aria-label="迁移进度" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+          <div class="progress-fill" id="jobBar" style="width:0%"></div>
+        </div>
+        <div class="job-stages" id="jobStages"></div>
+        <div class="job-deliver" id="jobDeliver" hidden></div>
+        <div class="log-console">
+          <div class="log-heading"><span class="console-dots"><i></i><i></i><i></i></span>执行日志<span class="log-mode" id="logState">IDLE</span></div>
+          <div class="log-lines" id="logLines" aria-label="任务日志">
+            <div class="log-line"><time>--:--:--</time><span class="level">INFO</span>等待提交任务。点日志行可复制。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- ③ 语料库总览 ---------- -->
+    <section class="panel" id="corpus" style="margin-top:18px">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"></path><path d="M4 9h16M9 9v10"></path></svg>
+          <h2>语料库总览</h2>
+        </div>
+        <span class="mini-label" id="covSum">—</span>
+      </div>
+      <div class="mb-meter" id="covBar"></div>
+      <div class="filter-bar" id="covFilters"></div>
+      <div class="tbl-scroll">
+        <table class="mb-table">
+          <thead><tr><th style="width:34%">模型</th><th>分类</th><th>划分</th><th>体积</th><th>状态</th><th>归类 / 说明</th></tr></thead>
+          <tbody id="covBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- ④ 交付产物下载 ---------- -->
+    <section class="panel" id="deliverables" style="margin-top:18px">
+      <div class="panel-head">
+        <div>
+          <h3>交付产物</h3>
+          <p class="panel-sub">每个模型一个自包含的 tar 包，点击即可下载。</p>
+        </div>
+        <span class="mini-label" id="delivSum">—</span>
+      </div>
+      <div class="deliv-search">
+        <input id="delivQ" type="search" placeholder="按模型名过滤，例如 bge、bert、qwen">
+      </div>
+      <div class="tbl-scroll">
+        <table class="mb-table">
+          <thead><tr>
+            <th style="width:40%">交付包</th>
+            <th>文档</th>
+            <th>体积</th>
+            <th style="width:150px">下载</th>
+          </tr></thead>
+          <tbody id="delivBody"><tr><td colspan="4" class="mini-label">加载中…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(() => {
+  const $  = s => document.querySelector(s);
+  const $$ = s => Array.from(document.querySelectorAll(s));
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
+    c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const toast = m => { clearTimeout(window.__t); $("#toast").textContent = m;
+    $("#toast").hidden = false; window.__t = setTimeout(() => $("#toast").hidden = true, 2800); };
+
+  const STAGES = [
+    ["resolve",       "解析模型身份"],
+    ["match_recipe",  "选择迁移方案"],
+    ["prepare_env",   "准备运行环境"],
+    ["adapt",         "适配代码算子"],
+    ["validate_infer","运行推理验证"],
+    ["quality",       "冒烟测试"],
+    ["deliver",       "生成交付产物"]
+  ];
+  const PHASE_CN = Object.fromEntries(STAGES);
+  const PHASE_IDX = Object.fromEntries(STAGES.map(([k], i) => [k, i]));
+  const CAT_CN = { nlp:"自然语言处理", "multi-modal":"多模态", audio:"语音", cv:"计算机视觉",
+                   "scientific-computing":"科学计算" };
+  const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4.5 4.5L20 6"></path></svg>';
+
+  let CUR = null, EV_AFTER = 0, TIMER = null;
+
+  // 迁移成功后在「生成交付产物」下方给出 tar 下载入口
+  function renderJobDeliver(j) {
+    const box = $("#jobDeliver");
+    if (!box) return;
+    if (!j || j.status !== "succeeded") { box.hidden = true; box.innerHTML = ""; return; }
+    let res = {};
+    try { res = JSON.parse(j.result_json || "{}") || {}; } catch (e) { res = {}; }
+    const pkg = res.package ||
+      String(j.model || "").replace(/\//g, "-").toLowerCase();
+    if (!pkg) { box.hidden = true; return; }
+    const href = "/api/download?package=" + encodeURIComponent(pkg);
+    box.hidden = false;
+    box.innerHTML =
+      '<div class="jd-row">'
+      + '<div class="jd-info"><b>交付包已生成</b>'
+      + '<span class="jd-name mono">' + esc(pkg) + '.tar.gz</span></div>'
+      + '<a class="dl-btn jd-btn" href="' + href + '" download>' + DL_ICON + ' 下载 tar</a>'
+      + '</div>';
+  }
+
+  function renderStages(events) {
+    const st = {};
+    const TERMINAL = { ok: 1, failed: 1, warn: 1 };
+    (events || []).forEach(e => {
+      const p = e.phase; if (!p) return;
+      // 终态（ok/failed/warn）无条件覆盖；running 只在还没终态时写入。
+      // 旧写法「!st[p] 才写」会丢掉 running -> ok 的转换，
+      // 导致「先 running 后 ok」的阶段永远算未完成（实测进度卡在 43%）。
+      if (TERMINAL[e.status]) st[p] = e.status;
+      else if (!TERMINAL[st[p]]) st[p] = e.status;
+    });
+    const doneIdx = Object.keys(st).filter(k => st[k] === "ok").map(k => PHASE_IDX[k] ?? -1);
+    const lastDone = doneIdx.length ? Math.max(...doneIdx) : -1;
+    $("#jobStages").innerHTML = STAGES.map(([k, label], i) => {
+      const s = st[k]; let cls = "", sym;
+      if (s === "ok" || s === "warn")  { cls = "succeeded"; sym = CHECK; }
+      else if (s === "failed")         { cls = "failed";    sym = "!"; }
+      else if (s === "running")        { cls = "running";   sym = '<i class="loading-dot"></i>'; }
+      else if (i <= lastDone)          { cls = "succeeded"; sym = CHECK; }
+      else                             { sym = String(i + 1).padStart(2, "0"); }
+      return `<div class="job-stage ${cls}" title="${esc(label)}"><span class="stage-symbol">${sym}</span><span>${esc(label)}</span></div>`;
+    }).join("");
+    const all = STAGES.map(([k]) => k);
+    const done = all.filter(k => st[k] === "ok").length;
+    const jobDone = CUR && (CUR.status === "succeeded" || CUR.status === "failed");
+    // 任务已到终态时，进度必须是 100%（否则会出现「已完成但 43%」）
+    const pct = jobDone ? 100 : Math.round(done * 100 / all.length);
+    const running = all.find(k => st[k] === "running") || (CUR && CUR.phase);
+    $("#jobBar").style.width = pct + "%";
+    $("#jobPct").textContent = pct + "%";
+    $("#jobPhase").textContent = jobDone
+      ? (CUR.status === "succeeded" ? "全部阶段已完成" : "迁移未通过，详见执行日志")
+      : (PHASE_CN[running] || "—");
+    const pr = $(".progress-track"); if (pr) pr.setAttribute("aria-valuenow", pct);
+  }
+
+  function addLog(events) {
+    const box = $("#logLines");
+    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 24;
+    (events || []).forEach(e => {
+      const d = new Date((e.ts || 0) * 1000);
+      const hh = String(d.getHours()).padStart(2, "0") + ":" +
+                 String(d.getMinutes()).padStart(2, "0") + ":" +
+                 String(d.getSeconds()).padStart(2, "0");
+      const lv = e.status === "failed" ? "ERROR" : e.status === "warn" ? "WARN" : "INFO";
+      const div = document.createElement("div");
+      div.className = "log-line";
+      div.innerHTML = `<time>${hh}</time><span class="level">${lv}</span>${esc(e.message)}`;
+      box.appendChild(div);
+    });
+    while (box.children.length > 400) box.removeChild(box.firstChild);
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  function setBadge(status) {
+    const b = $("#jobBadge");
+    const map = { running:["running","迁移中"], succeeded:["succeeded","已完成"],
+                  failed:["failed","未通过"], queued:["running","排队中"] };
+    const [cls, txt] = map[status] || ["", "待命"];
+    b.className = "job-badge " + cls;
+    b.innerHTML = '<i class="status-dot"></i>' + txt;
+  }
+
+  // 批量解析：换行 / 中英文逗号 / 分号 / 多个空格 都当分隔符
+  function parseModels(text) {
+    return String(text || "")
+      .split(/[\n\r,，;；]+/)
+      .flatMap(x => x.split(/\s{2,}/))
+      .map(x => x.trim())
+      .filter(x => x && x.includes("/"))
+      .filter((x, i, a) => a.indexOf(x) === i);
+  }
+
+  function refreshCount() {
+    const el = $("#inputCount");
+    if (!el) return;
+    const n = parseModels($("#modelInput").value).length;
+    el.textContent = n > 1 ? "将提交 " + n + " 个模型（并行执行，超出算力会自动排队）" : "";
+    el.hidden = n <= 1;
+  }
+
+  $("#migrationForm").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const models = parseModels($("#modelInput").value);
+    if (!models.length) {
+      $("#formError").textContent = "请至少输入一个模型（格式 org/name）";
+      return;
+    }
+    $("#formError").textContent = "";
+    $("#startButton").disabled = true;
+    $("#logLines").innerHTML = ""; EV_AFTER = 0;
+    $("#logState").textContent = "LIVE";
+    try {
+      const r = await fetch("/api/jobs", { method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ models }) });
+      const d = await r.json();
+      if (!r.ok || !d.job_id) throw new Error(d.error || ("HTTP " + r.status));
+      const n = d.count || 1;
+      CUR = { job_id: d.job_id, model: d.model };
+      $("#jobModel").textContent = n > 1 ? (d.model + " 等 " + n + " 个模型") : d.model;
+      $("#jobId").textContent = d.job_id;
+      $("#jobRoute").textContent = "路径判定中";
+      $("#jobBadge").className = "job-badge running";
+      $("#jobBadge").innerHTML = '<i class="status-dot"></i>排队中';
+      $("#modelMatch").textContent = n > 1
+        ? "已提交 " + n + " 个任务，并行执行；算力不足的会自动排队"
+        : ("任务已提交：" + d.job_id);
+      toast(n > 1 ? ("已提交 " + n + " 个模型") : "任务已提交");
+      poll();
+      if (TIMER) clearInterval(TIMER);
+      TIMER = setInterval(poll, 2500);
+      loadQueue();
+    } catch (e) {
+      $("#formError").textContent = "提交失败：" + e.message;
+      toast("提交失败");
+    } finally { $("#startButton").disabled = false; }
+  });
+
+  // Enter 提交（Shift+Enter 换行）
+  $("#modelInput").addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      $("#migrationForm").requestSubmit();
+    }
+  });
+  $("#modelInput").addEventListener("input", () => {
+    const t = $("#modelInput");
+    t.style.height = "auto";
+    t.style.height = Math.min(t.scrollHeight, 160) + "px";
+    refreshCount();
+  });
+  $$(".example-chip").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.batch) {
+      $("#modelInput").value = [
+        "AI-ModelScope/t5-small",
+        "AI-ModelScope/roberta-base",
+        "google/electra-small-discriminator",
+        "OpenGVLab/pvt_v2_b0",
+        "google/electra-small-generator"
+      ].join("\n");
+    } else {
+      $("#modelInput").value = b.dataset.name;
+    }
+    $("#modelInput").dispatchEvent(new Event("input"));
+    $("#modelInput").focus();
+  }));
+
+  async function poll() {
+    if (!CUR) return;
+    try {
+      const d = await (await fetch("/api/jobs/" + CUR.job_id)).json();
+      const j = d.job || {}, evs = d.events || [];
+      CUR = Object.assign(CUR, j);
+      $("#jobRoute").textContent =
+          j.route === "fast"   ? "① 完整匹配 · 复用已验证方案"
+        : j.route === "family" ? "② 同家族经验 · 参考已有方案并检查差异"
+        : j.route === "slow"   ? "③ 首次迁移 · 模型分析 + NPU 探路"
+        : "路径判定中";
+      const fresh = evs.filter(e => (e.seq || 0) > EV_AFTER);
+      if (fresh.length) { addLog(fresh); EV_AFTER = Math.max(...fresh.map(e => e.seq || 0)); }
+      renderStages(evs); setBadge(j.status);
+      renderJobDeliver(j);
+      if (j.status === "succeeded" || j.status === "failed") {
+        clearInterval(TIMER); TIMER = null;
+        $("#logState").textContent = j.status === "succeeded" ? "DONE" : "FAILED";
+        toast(j.status === "succeeded" ? "迁移完成，可下载交付包" : "迁移未通过，见执行日志");
+        loadCorpus(); loadDeliverables();
+      }
+    } catch (e) {}
+  }
+
+  $("#logLines").addEventListener("click", e => {
+    const line = e.target.closest(".log-line"); if (!line) return;
+    // 点日志行 -> 复制到剪贴板（原先会送到诊断助手，该面板已移除）
+    const txt = line.textContent.replace(/^\d\d:\d\d:\d\d\s*(INFO|WARN|ERROR)\s*/, "").trim();
+    if (navigator.clipboard && txt) {
+      navigator.clipboard.writeText(txt).then(() => toast("已复制该行日志"), () => {});
+    }
+  });
+
+  let COV = null, covFilter = "all", covCat = "all";
+  async function loadCorpus() {
+    try {
+      const r = await (await fetch("/api/corpus")).json();
+      COV = r;
+      const st = r.status_count || {};
+      const m = st.migrated || 0, un = st.unprobed || 0, tot = r.total || 1;
+      // 只统计已迁移：失败的不在页面上呈现
+      $("#covSum").textContent = "已迁移 " + m + (un ? " · 待探针 " + un : "")
+        + "（训练 " + r.train + " / 测试 " + r.test + "）";
+      $("#navCorpus").textContent = m;
+      $("#covBar").innerHTML =
+        '<i style="width:' + (m * 100 / tot) + '%;background:var(--green)"></i>'
+        + (un ? '<i style="width:' + (un * 100 / tot) + '%;background:#8fb8d9"></i>' : "");
+      const bk = r.bucket_count || {};
+      $("#covFilters").innerHTML =
+        '<span style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+        + 'font-size:12px;color:var(--muted)">已迁移 ' + m + ' 个模型</span>'
+        + '<span style="width:10px"></span>'
+        + [["all", "全部分类"]].concat(Object.entries(CAT_CN))
+          .map(([k, l]) => '<button data-c="' + k + '" class="' + (covCat === k ? "on" : "") + '">' + l + '</button>').join("");
+      $("#covFilters").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+        if (b.dataset.k) covFilter = b.dataset.k;
+        if (b.dataset.c) covCat = b.dataset.c;
+        renderCorpus();
+      }));
+      renderCorpus();
+    } catch (e) {}
+  }
+
+  function renderCorpus() {
+    if (!COV) return;
+    // 只列出已迁移的模型；失败项不在页面呈现
+    const rows = (COV.items || []).filter(x =>
+      x.status === "migrated" &&
+      (covCat === "all" || x.category === covCat));
+    const TAG = { migrated:["ok","已迁移"], failed:["bad","失败"], unprobed:["warn","待探针"], missing:["warn","未下载"] };
+    $("#covBody").innerHTML = rows.map(x => {
+      const t = TAG[x.status] || ["warn", esc(x.status)];
+      const det = x.status === "migrated"
+        ? '<span class="mono">' + esc(x.route || "已验证") + '</span>'
+        : '<span class="bk ' + esc(x.bucket || "") + '">' + esc(x.bucket || "?") + '</span> <span class="mono">'
+          + esc((x.reason || "").slice(0, 56)) + '</span>';
+      return '<tr><td><b>' + esc(x.model) + '</b>'
+        + (x.family ? '<div class="mono">' + esc(x.family) + '</div>' : "")
+        + '</td><td>' + esc(CAT_CN[x.category] || x.category) + '</td>'
+        + '<td class="mono">' + esc(x.split || "—") + '</td>'
+        + '<td class="mono">' + (x.gb != null ? x.gb + "G" : "—") + '</td>'
+        + '<td><span class="pill ' + t[0] + '">' + t[1] + '</span></td>'
+        + '<td>' + det + '</td></tr>';
+    }).join("") || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:26px">该筛选下无模型</td></tr>';
+    $("#covFilters").querySelectorAll("button").forEach(b => {
+      if (b.dataset.k) b.classList.toggle("on", b.dataset.k === covFilter);
+      if (b.dataset.c) b.classList.toggle("on", b.dataset.c === covCat);
+    });
+  }
+
+  async function loadExperience() {
+    try {
+      const r = await (await fetch("/api/experience")).json();
+      const cats = r.categories || [];
+      if (!cats.length) return;
+      $("#expBar").innerHTML = cats.map(c => {
+        const cls = c.rate >= 60 ? "good" : c.rate >= 30 ? "mid" : "bad";
+        return '<span class="c ' + cls + '" title="' + esc((c.routes || []).map(x => x[0] + "×" + x[1]).join("、") || "无成功路线") + '">'
+          + esc(c.name) + ' <b>' + c.rate + '%</b>'
+          + '<span style="color:var(--muted)">' + c.n_ok + '/' + c.n_total + '</span></span>';
+      }).join("");
+    } catch (e) {}
+  }
+
+  // ---------------- 并发任务队列 ----------------
+  // 后端每个任务一个线程 + 自动独占一张 NPU 卡，所以可以真并发。
+  // 这里把所有未结束的任务列出来，点条目切换下方详情视图。
+  const STAGE_KEYS = ["resolve","match_recipe","prepare_env","adapt",
+                      "validate_infer","quality","deliver"];
+
+  function stagePct(events) {
+    const st = {};
+    const TERM = { ok:1, failed:1, warn:1 };
+    (events || []).forEach(e => {
+      const p = e.phase; if (!p) return;
+      if (TERM[e.status]) st[p] = e.status;
+      else if (!TERM[st[p]]) st[p] = e.status;
+    });
+    return Math.round(STAGE_KEYS.filter(k => st[k] === "ok").length * 100 / STAGE_KEYS.length);
+  }
+
+  async function loadQueue() {
+    const panel = $("#queuePanel"), box = $("#queueList");
+    if (!panel || !box) return;
+    try {
+      const jr = await fetch("/api/jobs");
+      if (!jr.ok) return;
+      const jobs = await jr.json();
+
+      const isLive = st => st === "running" || st === "queued" || st === "pending";
+      const live = jobs.filter(j => isLive(j.status));
+      const recent = jobs.filter(j => !isLive(j.status)).slice(0, 3);
+      const show = live.concat(recent);
+      if (!show.length) { panel.hidden = true; return; }
+      panel.hidden = false;
+      const nRun = live.filter(j => j.status === "running").length;
+      const nQ = live.filter(j => j.status === "queued").length;
+      $("#queueSum").textContent = nRun + " 个运行中" + (nQ ? " · " + nQ + " 个排队" : "")
+        + (recent.length ? " · 最近 " + recent.length + " 个已结束" : "");
+
+      // 排队位置：按 created_at 排序，queued 里的序号
+      const queuedSorted = live.filter(j => j.status === "queued")
+        .sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+      const qpos = {};
+      queuedSorted.forEach((j, i) => qpos[j.job_id] = i + 1);
+
+      const cur = CUR && CUR.job_id;
+      const rows = await Promise.all(show.map(async j => {
+        let pct = 0;
+        try {
+          const d = await (await fetch("/api/jobs/" + j.job_id)).json();
+          pct = (j.status === "succeeded") ? 100 : stagePct(d.events || []);
+        } catch (e) {}
+        const badge = j.status === "running" ? '<span class="q-badge running">运行中</span>'
+                    : j.status === "queued"  ? '<span class="q-badge queued">排队 #' + (qpos[j.job_id] || 1) + '</span>'
+                    : j.status === "succeeded" ? '<span class="q-badge ok">已完成</span>'
+                    : '<span class="q-badge bad">未通过</span>';
+        const ph = j.status === "queued"
+          ? "等待空闲卡"
+          : (PHASE_CN[j.phase] || j.phase || "—");
+        return '<div class="q-item' + (j.job_id === cur ? " active" : "") +
+               '" data-job="' + esc(j.job_id) + '">'
+          + '<div class="q-name">' + esc(j.model) + '<small class="mono">' + esc(j.job_id) + '</small></div>'
+          + '<span class="q-phase">' + esc(ph) + '</span>'
+          + '<span class="q-bar"><i style="width:' + pct + '%"></i></span>'
+          + '<span class="q-pct">' + pct + '%</span>'
+          + badge + '</div>';
+      }));
+      box.innerHTML = rows.join("");
+      box.querySelectorAll(".q-item").forEach(el => {
+        el.addEventListener("click", () => {
+          const id = el.dataset.job;
+          const j = show.find(x => x.job_id === id);
+          if (!j) return;
+          CUR = { job_id: j.job_id, model: j.model };
+          EV_AFTER = 0;
+          $("#logLines").innerHTML = "";
+          $("#jobModel").textContent = j.model;
+          $("#jobId").textContent = j.job_id;
+          $("#logState").textContent = "LIVE";
+          if (TIMER) clearInterval(TIMER);
+          poll();
+          TIMER = setInterval(poll, 2500);
+          $("#jobPanel").scrollIntoView({ behavior:"smooth", block:"start" });
+        });
+      });
+    } catch (e) {}
+  }
+
+
+  // ---------------- 交付产物：tar 包下载 ----------------
+  let DELIV = [];
+
+  const DL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+    + 'stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/>'
+    + '<path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>';
+
+  function bytes(n) {
+    if (!n) return "—";
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + " KB";
+    return (n / 1024 / 1024).toFixed(1) + " MB";
+  }
+
+  function renderDeliv(q) {
+    const key = (q || "").trim().toLowerCase();
+    const rows = DELIV.filter(d => !key || d.package.toLowerCase().includes(key));
+    $("#delivSum").textContent = rows.length + " / " + DELIV.length + " 个交付包";
+    if (!rows.length) {
+      $("#delivBody").innerHTML = '<tr><td colspan="4" class="mini-label">没有匹配的交付包</td></tr>';
+      return;
+    }
+    $("#delivBody").innerHTML = rows.map(d => {
+      const docs = [];
+      if (d["DEPLOY.md"]) docs.push("部署");
+      if (d["TEST_REPORT.md"]) docs.push("测试");
+      if (d["ADAPTATION.md"]) docs.push("根因");
+      const href = "/api/download?package=" + encodeURIComponent(d.package);
+      return '<tr>'
+        + '<td><b>' + esc(d.package) + '</b></td>'
+        + '<td class="deliv-docs">' + (docs.length ? docs.join(' · ') : '—') + '</td>'
+        + '<td class="deliv-docs">' + (d.size ? bytes(d.size) : '—') + '</td>'
+        + '<td><a class="dl-btn" href="' + href + '" download>'
+        + DL_ICON + ' 下载 tar</a></td>'
+        + '</tr>';
+    }).join("");
+  }
+
+  async function loadDeliverables() {
+    try {
+      const r = await fetch("/api/deliveries");
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const d = await r.json();
+      DELIV = d.items || [];
+      // 按名称排序，便于找
+      DELIV.sort((a, b) => a.package.localeCompare(b.package));
+      renderDeliv($("#delivQ") ? $("#delivQ").value : "");
+    } catch (e) {
+      $("#delivBody").innerHTML =
+        '<tr><td colspan="4" class="mini-label">交付清单加载失败：' + esc(e.message) + '</td></tr>';
+    }
+  }
+
+  async function loadSidebar() {
+    try {
+      const r = await (await fetch("/api/corpus")).json();
+      const cnt = {};
+      (r.items || []).forEach(x => cnt[x.category] = (cnt[x.category] || 0) + 1);
+      const ICON = {
+        "multi-modal":'<path d="m12 2 5 5-5 5-5-5 5-5Zm-5 10 5 5-5 5-5-5 5-5Zm10 0 5 5-5 5-5-5 5-5Z"></path>',
+        nlp:'<path d="M4 6V4h16v2M12 4v16m-4 0h8"></path>',
+        audio:'<path d="M4 10v4m4-8v12m4-16v20m4-16v12m4-8v4"></path>',
+        cv:'<path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"></path><rect x="7" y="7" width="10" height="10" rx="2"></rect>',
+        "scientific-computing":'<path d="M9 3h6m-5 0v6L4 19a1.5 1.5 0 0 0 1.3 2h13.4A1.5 1.5 0 0 0 20 19L14 9V3M7 15h10"></path>'
+      };
+      $("#categoryNav").innerHTML = Object.keys(CAT_CN).map(k =>
+        '<button class="nav-item" data-cat="' + k + '">'
+        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
+        + (ICON[k] || "") + '</svg><span>' + CAT_CN[k] + '</span>'
+        + '<span class="nav-count">' + (cnt[k] || 0) + '</span></button>').join("");
+      $$("#categoryNav .nav-item").forEach(b => b.addEventListener("click", () => {
+        covCat = b.dataset.cat; covFilter = "all";
+        $("#corpus").scrollIntoView({ behavior:"smooth", block:"start" }); renderCorpus();
+      }));
+    } catch (e) {}
+  }
+
+  async function probeEnvironment() {
+    try {
+      const v = await (await fetch("/api/pitfalls")).json();
+    } catch (e) {
+    }
+  }
+
+  const closeNav = () => { $("#sidebar").classList.remove("open");
+    $("#navBackdrop").hidden = true; $("#menuButton").setAttribute("aria-expanded", "false"); };
+  $("#menuButton").addEventListener("click", () => {
+    const open = !$("#sidebar").classList.contains("open");
+    $("#sidebar").classList.toggle("open", open);
+    $("#navBackdrop").hidden = !open;
+    $("#menuButton").setAttribute("aria-expanded", String(open));
+  });
+  $("#navBackdrop").addEventListener("click", closeNav);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeNav(); });
+
+  $$("#mainNav .nav-item").forEach(a => a.addEventListener("click", () => {
+    $$("#mainNav .nav-item").forEach(x => { x.classList.remove("active"); x.removeAttribute("aria-current"); });
+    a.classList.add("active"); a.setAttribute("aria-current", "page");
+    const sp = a.querySelector("span"); if (sp) $("#pageCrumb").textContent = sp.textContent;
+    closeNav();
+  }));
+
+  renderStages([]);
+  loadCorpus(); loadSidebar(); loadExperience(); probeEnvironment(); loadDeliverables();
+  loadQueue(); setInterval(loadQueue, 4000);
+  const _dq = $("#delivQ");
+  if (_dq) _dq.addEventListener("input", () => renderDeliv(_dq.value));
+})();
+</script>
+</body>
+</html>

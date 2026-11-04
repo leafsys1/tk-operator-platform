@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模型迁移方法论 · 昇腾 910B</title>
+<style>
+:root{
+  --ink:#16211c; --muted:#5c6b63; --line:#e2e8e4; --canvas:#f6f8f7;
+  --green:#14532d; --green2:#1f7a45; --mint:#e8f5ec;
+  --amber:#7a4a0c; --amberbg:#fdf3e3; --amberline:#f0dcb4;
+  --red:#8f2d18; --redbg:#fdeceb;
+  --blue:#1f4f9e; --bluebg:#eef4ff;
+  --purple:#5b2d8e; --purplebg:#f2ecfa;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased}
+a{color:var(--green2);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:.88em;background:#eef2f0;border-radius:4px;padding:1.5px 5px;color:#1e3a2b}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.6;background:#0f1a14;color:#d8e8de;
+  border-radius:10px;padding:14px 16px;overflow-x:auto;margin:12px 0}
+pre code{background:none;color:inherit;padding:0}
+
+/* ---------- 布局 ---------- */
+.wrap{display:flex;max-width:1440px;margin:0 auto}
+nav.toc{width:250px;flex:none;position:sticky;top:0;height:100vh;overflow-y:auto;
+  padding:26px 16px 40px 24px;border-right:1px solid var(--line);background:#fff}
+nav.toc h4{margin:0 0 12px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+nav.toc a{display:block;padding:5px 9px;border-radius:7px;font-size:13px;color:var(--ink);margin-bottom:1px}
+nav.toc a:hover{background:var(--mint);text-decoration:none}
+nav.toc a.sub{padding-left:20px;font-size:12.5px;color:var(--muted)}
+main{flex:1;min-width:0;padding:0 40px 100px}
+
+/* ---------- Hero ---------- */
+.hero{background:linear-gradient(135deg,#0f3d20 0%,#14532d 55%,#1f7a45 100%);
+  color:#fff;border-radius:0 0 18px 18px;padding:44px 40px 38px;margin:0 -40px 34px}
+.hero .eyebrow{font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;opacity:.72}
+.hero h1{margin:10px 0 12px;font-size:36px;line-height:1.25;font-weight:800;letter-spacing:-.5px}
+.hero h1 em{font-style:normal;color:#8fe3b0}
+.hero p{margin:0;max-width:760px;opacity:.9;font-size:14.5px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:26px}
+.kpi{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);
+  border-radius:11px;padding:13px 15px}
+.kpi b{display:block;font-size:26px;line-height:1.15;font-weight:800}
+.kpi span{font-size:11.5px;opacity:.78;display:block;margin-top:3px}
+
+/* ---------- 章节 ---------- */
+section{margin:0 0 46px;scroll-margin-top:20px}
+h2{font-size:24px;margin:0 0 6px;font-weight:800;letter-spacing:-.3px;
+  padding-bottom:11px;border-bottom:2px solid var(--line)}
+h2 .num{display:inline-block;min-width:30px;color:var(--green2);font-family:var(--mono);font-size:17px}
+h3{font-size:16.5px;margin:26px 0 9px;font-weight:700;color:var(--green)}
+h4{font-size:14px;margin:18px 0 7px;font-weight:700}
+p{margin:9px 0}
+.lede{font-size:15.5px;color:var(--muted);margin:6px 0 20px}
+ul,ol{margin:9px 0;padding-left:22px}
+li{margin:5px 0}
+
+/* ---------- 卡片 / 表格 ---------- */
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+.card.warn{background:var(--amberbg);border-color:var(--amberline)}
+.card.bad{background:var(--redbg);border-color:#f3cfc9}
+.card.good{background:var(--mint);border-color:#bfe3cb}
+.card.info{background:var(--bluebg);border-color:#cfe0f7}
+.card h4{margin-top:0}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;background:#fff;
+  border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th{background:#f2f6f3;text-align:left;padding:10px 13px;font-weight:700;font-size:12.5px;
+  color:var(--green);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 13px;border-bottom:1px solid #eef2f0;vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#fafcfb}
+td code{white-space:nowrap}
+
+/* ---------- 徽章 ---------- */
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;
+  line-height:1.6;white-space:nowrap}
+.tag.a{background:#eef4ff;color:#1f4f9e}
+.tag.b{background:#f2ecfa;color:#5b2d8e}
+.tag.c{background:#fdeceb;color:#8f2d18}
+.tag.d{background:#fdf3e3;color:#7a4a0c}
+.tag.e{background:#e8f5ec;color:#14532d}
+.tag.ok{background:#e8f5ec;color:#14532d}
+.tag.no{background:#fdeceb;color:#8f2d18}
+.tag.mid{background:#fdf3e3;color:#7a4a0c}
+
+/* ---------- 流程 ---------- */
+.flow{display:flex;flex-wrap:wrap;gap:0;margin:18px 0}
+.flow .step{flex:1;min-width:150px;position:relative;background:#fff;border:1px solid var(--line);
+  padding:13px 15px 13px 17px;margin-right:-1px}
+.flow .step:first-child{border-radius:10px 0 0 10px}
+.flow .step:last-child{border-radius:0 10px 10px 0;margin-right:0}
+.flow .step b{display:block;font-size:13px;color:var(--green)}
+.flow .step small{display:block;font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.5}
+.flow .step .n{font-family:var(--mono);font-size:11px;color:var(--green2);display:block;margin-bottom:3px}
+
+/* ---------- 四步循环 ---------- */
+.loop{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:13px;margin:18px 0}
+.loop .q{background:#fff;border:1px solid var(--line);border-left:3px solid var(--green2);
+  border-radius:9px;padding:13px 16px}
+.loop .q b{display:block;font-size:13.5px;color:var(--green);margin-bottom:5px}
+.loop .q span{font-size:12.5px;color:var(--muted);line-height:1.6}
+
+/* ---------- 案例 ---------- */
+.case{background:#fff;border:1px solid var(--line);border-radius:11px;margin:13px 0;overflow:hidden}
+.case-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:12px 17px;background:#f7faf8;border-bottom:1px solid var(--line)}
+.case-h b{font-size:14px}
+.case-h .meta{margin-left:auto;font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+.case-b{padding:13px 17px}
+.case-b dl{margin:0;display:grid;grid-template-columns:88px 1fr;gap:7px 14px;font-size:13px}
+.case-b dt{color:var(--muted);font-weight:600;font-size:12.5px}
+.case-b dd{margin:0}
+
+/* ---------- 分类卡 ---------- */
+.cats{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin:16px 0}
+.cat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.cat h4{margin:0 0 3px;font-size:15px;display:flex;align-items:center;gap:8px}
+.cat .pct{font-family:var(--mono);font-size:12px;color:var(--green2);margin-bottom:9px}
+.cat ul{margin:8px 0 0;padding-left:19px;font-size:13px;color:var(--muted)}
+.cat li{margin:4px 0}
+
+/* ---------- 底线 ---------- */
+.rule{background:#fff;border:1px solid var(--line);border-radius:11px;padding:14px 17px;margin:11px 0;
+  border-left:3px solid var(--green2)}
+.rule b{color:var(--green)}
+.rule.no{border-left-color:#c0392b}
+.rule.no b{color:var(--red)}
+.rule.mid{border-left-color:#d9a441}
+.rule.mid b{color:var(--amber)}
+
+footer{border-top:1px solid var(--line);margin-top:50px;padding:26px 0 0;color:var(--muted);font-size:12.5px}
+
+@media (max-width:1080px){
+  nav.toc{display:none}
+  main{padding:0 20px 70px}
+  .hero{margin:0 -20px 26px;padding:34px 22px 30px;border-radius:0}
+  .hero h1{font-size:27px}
+  .flow .step{border-radius:9px!important;margin-right:0;margin-bottom:8px}
+}
+@media print{
+  nav.toc{display:none} main{padding:0} .hero{border-radius:0;margin:0 0 24px}
+  section{page-break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h4>目录</h4>
+  <a href="#what">一、迁移到底在做什么</a>
+  <a href="#flow">二、七阶段流程</a>
+  <a href="#method">三、四步循环方法论</a>
+  <a href="#routes">四、加载路线全景</a>
+  <a href="#pitfalls">五、坑库：五桶归因</a>
+  <a class="sub" href="#bucket-a">A · 环境依赖</a>
+  <a class="sub" href="#bucket-b">B · 设备 API</a>
+  <a class="sub" href="#bucket-c">C · 算子缺陷</a>
+  <a class="sub" href="#bucket-d">D · 性能</a>
+  <a class="sub" href="#bucket-e">E · 结构与入口</a>
+  <a href="#diff">六、五类模型差异</a>
+  <a href="#cases">七、难例专题</a>
+  <a href="#verify">八、什么算迁移成功</a>
+  <a href="#deliver">九、交付物规范</a>
+  <a href="#data">十、数据看板</a>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="eyebrow">Model Migration Playbook · Ascend 910B</div>
+  <h1>把模型搬到昇腾 910B，<br><em>到底要做什么</em></h1>
+  <p>这不是"换个 device 参数"就能完成的事。本文是从 117 个真实模型、98 条踩坑记录里抽出来的方法论：
+     迁移在做什么、七阶段怎么走、不同模型差在哪、什么才算真的成功。</p>
+  <div class="kpis">
+    <div class="kpi"><b>117</b><span>语料模型</span></div>
+    <div class="kpi"><b>108</b><span>迁移成功</span></div>
+    <div class="kpi"><b>92%</b><span>成功率</span></div>
+    <div class="kpi"><b>20+</b><span>加载路线</span></div>
+    <div class="kpi"><b>98</b><span>坑库条目</span></div>
+    <div class="kpi"><b>69/31</b><span>训练/测试</span></div>
+  </div>
+</div>
+
+<!-- ============================================================ 一 -->
+<section id="what">
+<h2><span class="num">01</span>迁移到底在做什么</h2>
+<p class="lede">一句话：让一个原本为 GPU/CPU 写的模型，能在昇腾 NPU 上<strong>真正跑出结果</strong>——而不只是"报错变少"。</p>
+
+<h3>迁移不是一件事，是四件事</h3>
+<table>
+<thead><tr><th style="width:120px">层次</th><th>要解决的问题</th><th>典型症状</th></tr></thead>
+<tbody>
+<tr><td><b>能装上</b></td><td>依赖、Python 版本、wheel 有没有 aarch64 构建</td><td><code>No module named X</code>、<code>No matching distribution</code></td></tr>
+<tr><td><b>能加载</b></td><td>建模代码在哪、类怎么构造、权重键名对不对</td><td><code>Unrecognized model</code>、<code>size mismatch</code>、<code>missing keys</code></td></tr>
+<tr><td><b>能算</b></td><td>算子有没有 NPU 实现、有没有回退</td><td><code>aclnn</code> 报错、<code>Unsupported op</code>、静默 NaN</td></tr>
+<tr><td><b>能交付</b></td><td>别人换台机器照着能不能复现</td><td>"我这能跑"但拿不到产物</td></tr>
+</tbody>
+</table>
+
+<div class="card info">
+<h4>最容易犯的错：把"跑起来了"当成"迁移成功"</h4>
+<p>最常见的是 <code>model.to("npu")</code> 不报错就宣布完成——但实际可能悄悄回退到 CPU，
+或者权重根本没加载（<code>strict=False</code> 吞掉了几十个 <code>missing_keys</code>）。
+本文后面第 8 节给了明确的判定标准。</p>
+</div>
+</section>
+
+<!-- ============================================================ 二 -->
+<section id="flow">
+<h2><span class="num">02</span>七阶段流程</h2>
+<p class="lede">每个模型都走同一条主线。有配方的走快路径（跳过 3–5），没有的走全流程。</p>
+
+<div class="flow">
+  <div class="step"><span class="n">01</span><b>解析模型身份</b><small>org/name → 本地目录；没有就下载</small></div>
+  <div class="step"><span class="n">02</span><b>选择迁移方案</b><small>命中已验证配方 → 复用；否则逐步探路</small></div>
+  <div class="step"><span class="n">03</span><b>准备运行环境</b><small>镜像、依赖、NPU 兼容层</small></div>
+  <div class="step"><span class="n">04</span><b>适配代码算子</b><small>改 device / 补算子 / 换实现</small></div>
+  <div class="step"><span class="n">05</span><b>运行推理验证</b><small>真的前向一次，拿到输出</small></div>
+  <div class="step"><span class="n">06</span><b>冒烟测试</b><small>产物完整性 + 判定</small></div>
+  <div class="step"><span class="n">07</span><b>生成交付产物</b><small>打包成可复现的 tar</small></div>
+</div>
+
+<h3>两条路径</h3>
+<table>
+<thead><tr><th style="width:110px">路径</th><th>触发条件</th><th>耗时</th><th>做什么</th></tr></thead>
+<tbody>
+<tr><td><span class="tag ok">fast</span></td><td>命中已验证配方</td><td>~20 秒</td>
+    <td>直接复用历史加载路线 + 修复步骤，只做一次加载确认</td></tr>
+<tr><td><span class="tag mid">slow</span></td><td>首次迁移</td><td>3–10 分钟</td>
+    <td>画像 → 探路（20+ 条路线依次试）→ 报错归因 → 修 → 再试</td></tr>
+</tbody>
+</table>
+
+<div class="card">
+<h4>为什么"配方"是核心资产</h4>
+<p>第一次迁移要花几十分钟试错，但试通之后把<strong>路线 + 依赖 + 修复步骤</strong>存下来，
+下次同样的模型（或同家族模型）只要 20 秒。</p>
+<pre><code>{
+  "model": "AI-ModelScope/LivePortrait",
+  "route": "liveportrait:4-modules",
+  "loaded": true,
+  "autodeps": [],
+  "metrics": { "n_params_total": 129850169 },
+  "verdict": "LOAD-OK"
+}</code></pre>
+</div>
+</section>
+
+<!-- ============================================================ 三 -->
+<section id="method">
+<h2><span class="num">03</span>四步循环方法论</h2>
+<p class="lede">面对一个报错，不要靠灵感。按这四步走，每一步都有明确产出。</p>
+
+<div class="loop">
+  <div class="q"><b>① 探路</b><span>原样跑官方代码，只切设备。收集<strong>真实报错队列</strong>，不预判、不改造。</span></div>
+  <div class="q"><b>② 归因</b><span>按证据特征分到 A/B/C/D/E 桶。看的是"这段报错长什么样"，不是记忆中的报错串。</span></div>
+  <div class="q"><b>③ 修复</b><span>按桶选修法：补依赖 / 打补丁 / 换路线 / 写入口 / 通算子。</span></div>
+  <div class="q"><b>④ 回写</b><span>修通了立刻写进坑库 + 生成配方。不写 = 下次还得重来。</span></div>
+</div>
+
+<h3>三条铁律</h3>
+<div class="rule"><b>铁律一：先建立"失败基线"。</b>原样跑一遍拿到真报错，比凭经验猜改哪里快十倍。
+很多"迁移难题"其实是自己提前改代码引入的。</div>
+<div class="rule"><b>铁律二：一次只改一个变量。</b>同时改三处，成功了你不知道是哪处起作用，失败了你不知道是哪处害的。</div>
+<div class="rule mid"><b>铁律三：报错的第一行 ≠ 根因。</b>调用栈指向的那个算子，往往只是"第一个做同步/搬移的调用点"，
+真正崩的地方更早埋下。修不到点子上时，用最小复现脚本往前追。</div>
+
+<h3>一个非常常见的误判</h3>
+<div class="card bad">
+<h4>「这个库不可用」—— 先确认它到底是哪个库</h4>
+<p>PyPI 上<strong>同名不等于同一个项目</strong>。实测踩过的：</p>
+<table style="margin:9px 0 0">
+<thead><tr><th>包名</th><th>你以为的</th><th>实际装到的</th></tr></thead>
+<tbody>
+<tr><td><code>cosyvoice</code></td><td>CosyVoice 模型代码</td><td>只有 <code>api.py</code>/<code>server.py</code> 的 API 客户端（4 个文件）</td></tr>
+<tr><td><code>ofa</code></td><td>OFA 多模态模型</td><td>Once-For-All 剪枝框架</td></tr>
+<tr><td><code>janus</code></td><td>Janus 多模态</td><td>异步队列库</td></tr>
+<tr><td><code>sapiens</code></td><td>Meta 人体视觉</td><td>抗体语言模型</td></tr>
+</tbody>
+</table>
+<p style="margin-top:10px"><b>判据</b>：装完数一下文件数。<code>pip show</code> 说装了但
+<code>ls site-packages | grep &lt;pkg&gt;</code> 只有 <code>*.dist-info</code> → 空壳 wheel。</p>
+</div>
+
+<h3>另一个反直觉的规律</h3>
+<div class="card good">
+<h4>「缺什么」经常是假的 —— 先去查「是不是其实已经有了」</h4>
+<p>实测被推翻过的判断：</p>
+<ul>
+<li><code>TripoSR</code> 判"缺 DINOv2 权重" → 真因：权重<strong>本来就在 model.ckpt 里</strong>，只缺一份 config</li>
+<li><code>megatron-util</code> 判"PyPI 没有" → 真因：装了，但目录名带连字符（<code>megatron-util</code> vs <code>megatron_util</code>）</li>
+<li><code>SwissArmyTransformer</code> 判"已安装" → 真因：wheel 是空壳，只有 dist-info</li>
+<li><code>GLM-Summarization</code> 判"FFN 尺寸不对" → 真因：把 GLU 判反了（上下投影维度相等 = 非 GLU）</li>
+</ul>
+</div>
+</section>
+<!-- ============================================================ 四 -->
+<section id="routes">
+<h2><span class="num">04</span>加载路线全景</h2>
+<p class="lede">探针会按顺序试这些路线。命中哪条，就决定了这个模型接下来怎么走。</p>
+
+<h3>通用路线（覆盖大部分标准模型）</h3>
+<table>
+<thead><tr><th style="width:210px">路线</th><th>适用</th><th>关键点</th></tr></thead>
+<tbody>
+<tr><td><code>transformers.AutoModel</code></td><td>标准 HF 架构</td><td>最省事的一条；失败先去查 <code>config.json</code> 的 <code>model_type</code></td></tr>
+<tr><td><code>modelscope.pipeline</code></td><td>魔搭官方模型</td><td>魔搭专有格式（<code>configuration.json</code> 带 task）走这条</td></tr>
+<tr><td><code>remote-code</code></td><td>带 <code>auto_map</code> 的自定义架构</td><td>需要 <code>trust_remote_code=True</code>，且代码文件要在本地</td></tr>
+<tr><td><code>diffusers</code></td><td>扩散模型</td><td>看 <code>model_index.json</code>；优先 <code>DiffusionPipeline</code></td></tr>
+<tr><td><code>timm-ckpt</code></td><td>纯视觉骨干</td><td>只有 <code>.pth</code>/<code>.bin</code> 没有 config 时</td></tr>
+<tr><td><code>torchscript</code></td><td>已导出 <code>.pt</code></td><td><code>torch.jit.load</code></td></tr>
+<tr><td><code>own-framework</code></td><td>厂商自有框架</td><td>按仓库 README 走，通常要 clone 官方代码</td></tr>
+</tbody>
+</table>
+
+<h3>专用路线（一个模型一个坑走出来的）</h3>
+<table>
+<thead><tr><th style="width:180px">路线</th><th>模型家族</th><th>为什么需要专用</th></tr></thead>
+<tbody>
+<tr><td><code>speechbrain</code></td><td>SpeechBrain 音频</td><td><code>hyperparams.yaml</code> + <code>!new:</code> 实例化</td></tr>
+<tr><td><code>funasr</code></td><td>FunASR / SenseVoice</td><td>需要 <code>AutoModel</code> 专属类，<code>--no-deps</code> 装</td></tr>
+<tr><td><code>fish-speech</code></td><td>FishSpeech TTS</td><td>自研架构 + 多层依赖</td></tr>
+<tr><td><code>pyannote</code></td><td>pyannote 说话人</td><td><code>Model.from_pretrained</code> / <code>PyanNet</code></td></tr>
+<tr><td><code>rwkv</code></td><td>RWKV</td><td>需要 <code>rwkv</code> 包 + 自定义 <code>model.py</code></td></tr>
+<tr><td><code>voxcpm</code> / <code>qwen-tts</code> / <code>cosyvoice</code></td><td>语音合成</td><td>各自的自研声学模型</td></tr>
+<tr><td><code>florence2</code></td><td>Florence-2</td><td>两套 config 格式，要转换</td></tr>
+<tr><td><code>sat</code></td><td>GLM-130B 系</td><td>SwissArmyTransformer + Megatron checkpoint</td></tr>
+<tr><td><code>paddle</code></td><td>PaddlePaddle 系</td><td>需要 <code>py3.10</code> + <code>paddle-custom-npu</code></td></tr>
+<tr><td><code>ai4s-repo</code></td><td>科学计算</td><td>科研仓库，接口五花八门</td></tr>
+<tr><td><code>ultralytics</code></td><td>YOLO 系</td><td>需要系统 <code>libgl1</code></td></tr>
+</tbody>
+</table>
+
+<div class="card warn">
+<h4>路线不是"选一个"，而是"依次试到通"</h4>
+<p>探针里每条路线都包在 <code>try/except</code> 里，失败就换下一条。
+这也是为什么一个模型能试十几分钟——但换来的是<strong>不需要人肉试错</strong>。</p>
+</div>
+</section>
+
+<!-- ============================================================ 五 -->
+<section id="pitfalls">
+<h2><span class="num">05</span>坑库：五桶归因</h2>
+<p class="lede">看到一条报错，先判断它属于哪一类。分类对了，修法就定了。</p>
+
+<table>
+<thead><tr><th style="width:90px">桶</th><th>含义</th><th>判据（证据特征）</th><th>修法方向</th></tr></thead>
+<tbody>
+<tr><td><span class="tag a">A</span></td><td>环境 / 依赖</td>
+    <td><code>ModuleNotFoundError</code>、<code>No module named</code>、<code>cannot import name</code></td>
+    <td>补装；<b>必须带版本约束</b>（<code>numpy&lt;2</code> 等），否则带崩 NPU 栈</td></tr>
+<tr><td><span class="tag b">B</span></td><td>设备 API</td>
+    <td><code>device should be either</code>、<code>CUDA</code>、<code>.cuda()</code>、<code>npu_available</code></td>
+    <td>启用 NPU 兼容层（<code>transfer_to_npu</code> + <code>verify_device</code> 补丁）</td></tr>
+<tr><td><span class="tag c">C</span></td><td>算子缺陷</td>
+    <td><code>aclnn</code>、<code>AscendC</code>、<code>not implemented</code>、<code>Unsupported op</code></td>
+    <td>算子桥接（复用 aclnn / 写 AscendC / 纯 PyTorch 替代）</td></tr>
+<tr><td><span class="tag d">D</span></td><td>性能资源</td>
+    <td><code>out of memory</code>、<code>OOM</code>、<code>HBM</code>、<code>timeout</code></td>
+    <td>降 batch / 换空闲卡 / 数据并行</td></tr>
+<tr><td><span class="tag e">E</span></td><td>结构与入口</td>
+    <td><code>Unrecognized model</code>、<code>no file named</code>、<code>size mismatch</code></td>
+    <td>换路线 / 写专用入口 / 从权重反推架构</td></tr>
+</tbody>
+</table>
+
+<h3 id="bucket-a">A 桶：环境与依赖</h3>
+<p>看起来最简单，实际上最容易把人带沟里。核心难点是 <strong>"装得下"不等于"装得对"</strong>。</p>
+<table>
+<thead><tr><th style="width:230px">现象</th><th>真相</th><th>做法</th></tr></thead>
+<tbody>
+<tr><td>PyPI 没有 aarch64 wheel</td><td>官方源可能有</td>
+    <td>加 <code>--extra-index-url</code>（如 PaddlePaddle 官方源有 <code>cp312-linux_aarch64</code>）</td></tr>
+<tr><td>PyPI 包名相同</td><td>可能是另一个项目</td><td>数文件数；看 <code>config.yaml</code> 里 <code>!new:</code> 引用的模块路径存不存在</td></tr>
+<tr><td><code>pip show</code> 说装了但 import 失败</td><td>空壳 wheel</td><td>只有 <code>dist-info</code> 没代码 → 从源码仓库装</td></tr>
+<tr><td>包能装但 import 不了</td><td>目录名带连字符</td><td><code>ln -s megatron-util megatron_util</code></td></tr>
+<tr><td><code>pip install</code> 卡住</td><td>依赖回溯爆炸</td><td><code>--no-deps</code> + 逐个补 <code>ModuleNotFoundError</code></td></tr>
+</tbody>
+</table>
+
+<div class="card bad">
+<h4>A 桶最危险的一条：装依赖带崩整个 NPU 栈</h4>
+<p>无条件装最新版 <code>numpy</code> / <code>pyarrow</code> 会让 <code>torch_npu</code> 直接不可用。
+<strong>补装必须带版本约束</strong>，并且优先用 <code>--no-deps</code> 只装缺的那个包。</p>
+</div>
+
+<h3 id="bucket-b">B 桶：设备 API</h3>
+<p>昇腾最有效的一招：<code>torch_npu.contrib.transfer_to_npu</code> 把 <code>torch.cuda.*</code> 全重定向到 <code>torch.npu.*</code>。
+但还有一些它管不到的：</p>
+<ul>
+<li><code>assert device.type == "cuda"</code> 这类硬断言 → 补丁改断言</li>
+<li><code>torch.cuda.is_available()</code> 在自定义代码里 → 走 shim 兜底</li>
+<li><code>torch.jit.script</code> → NPU 不支持，要 <code>TORCHDYNAMO_DISABLE=1</code></li>
+<li><code>torch.compile(fullgraph=True)</code> → NPU 上 <code>InternalTorchDynamoError</code>，关掉</li>
+</ul>
+
+<h3 id="bucket-c">C 桶：算子缺陷</h3>
+<p>这一桶最麻烦，因为<strong>报错位置常常不是根因</strong>。</p>
+<table>
+<thead><tr><th style="width:210px">场景</th><th>做法</th></tr></thead>
+<tbody>
+<tr><td>算子完全没有</td><td>纯 PyTorch 等价实现（如 <code>torch_scatter</code> → 用 <code>index_add</code> 写）</td></tr>
+<tr><td>算子有但精度不对</td><td>定位到具体 op，看是否 fp16 溢出</td></tr>
+<tr><td>C++ 扩展编译不过</td><td>看它被调用的位置：只在导出/可视化用 → 写占位 stub</td></tr>
+</tbody>
+</table>
+<div class="card">
+<h4>判断「C++ 扩展能不能 stub」的方法</h4>
+<p><b>看它在仓库里被调用的位置。</b>只出现在"最后一步导出"就可以 stub；参与前向计算就不行。</p>
+<p>实测可 stub 的：<code>torchmcubes</code>（只导出 mesh）、<code>rembg</code>（只抠图预处理）、
+<code>open3d</code>（只可视化）、<code>FlexiCubes</code>（只提 mesh）。</p>
+</div>
+
+<h3 id="bucket-d">D 桶：性能与资源</h3>
+<ul>
+<li><code>910B1</code> 单卡 <strong>64 GB HBM</strong>（<code>npu-smi</code> 报 65536 MB）</li>
+<li>模型权重超过 <strong>8 卡合计 512 GB</strong> → 直接判定无法迁移，不必尝试</li>
+<li>单模型未超限但多任务并发 → 排队，不要硬塞</li>
+</ul>
+
+<h3 id="bucket-e">E 桶：结构与入口</h3>
+<p>这一桶占比最高，也是最需要"看懂模型"的地方。</p>
+<table>
+<thead><tr><th style="width:230px">现象</th><th>真相 / 做法</th></tr></thead>
+<tbody>
+<tr><td><code>Unrecognized model</code></td><td>缺 <code>model_type</code> 或需要厂商代码 → 换 pipeline / 写专用入口</td></tr>
+<tr><td><code>size mismatch</code></td><td>构造参数不对 → 去仓库找 <code>config.yaml</code> / <code>models.yaml</code>，<b>别猜</b></td></tr>
+<tr><td><code>missing_keys</code> 一堆</td><td>键名映射问题 → 按后缀匹配 + 形状校验</td></tr>
+<tr><td>声明的类在仓库里不存在</td><td>checkpoint 比公开代码新 → 从权重反推架构自己实现</td></tr>
+</tbody>
+</table>
+
+<div class="card good">
+<h4>E 桶最重要的能力：从权重反推架构</h4>
+<p>当官方代码不可得时，权重本身就写满了架构信息。看键名和形状就能复原：</p>
+<pre><code>word_embeddings.weight              → vocab, hidden
+transformer.layers.N.*              → 层数
+dense_h_to_4h vs dense_4h_to_h      → 是否 GLU（相等=非GLU，两倍=GLU）
+attn.wk.weight 的形状                → 是否 GQA（比 wq 窄 = 有 KV 头分组）
+rope_embed.periods                  → 用 RoPE 而非绝对位置编码</code></pre>
+<p><b>GLU 判据（卡过两轮）</b>：<code>dense_h_to_4h</code> 与 <code>dense_4h_to_h</code> 维度<b>相等</b> →
+<code>inner_hidden_size = 4*hidden, no_glu=1</code>；<b>两倍</b>关系 → <code>inner = 2*hidden, no_glu=0</code>。</p>
+</div>
+</section>
+<!-- ============================================================ 六 -->
+<section id="diff">
+<h2><span class="num">06</span>五类模型，差在哪</h2>
+<p class="lede">同样是"迁移"，五类模型的主战场完全不同。下面每张卡里的"最常见坑"都是实测频率最高的。</p>
+
+<div class="cats">
+
+<div class="cat">
+  <h4>自然语言处理 <span class="tag ok">38/38</span></h4>
+  <div class="pct">成功率 100%</div>
+  <p style="font-size:13.5px;margin:0">最成熟的一类。<code>transformers</code> 覆盖绝大多数，
+     <code>AutoModel</code> 一把过。</p>
+  <ul>
+    <li><b>主战场</b>：config 兼容、分词器、tie_word_embeddings</li>
+    <li><b>最常见坑</b>：<code>lm_head.weight</code> 缺失（其实与 embed 绑定）</li>
+    <li><b>特殊</b>：GLM 系走 SAT + Megatron 格式</li>
+  </ul>
+</div>
+
+<div class="cat">
+  <h4>计算机视觉 <span class="tag ok">19/21</span></h4>
+  <div class="pct">成功率 90%</div>
+  <p style="font-size:13.5px;margin:0">分裂成两派：标准骨干（好迁）和带前后处理的业务模型（麻烦）。</p>
+  <ul>
+    <li><b>主战场</b>：timm/OpenMMLab 权重、图像预处理、mesh 导出</li>
+    <li><b>最常见坑</b>：缺系统图形库 <code>libGL.so.1</code></li>
+    <li><b>特殊</b>：3D 生成模型要 <code>torchmcubes</code>（可 stub）</li>
+  </ul>
+</div>
+
+<div class="cat">
+  <h4>多模态 <span class="tag mid">24/28</span></h4>
+  <div class="pct">成功率 86%</div>
+  <p style="font-size:13.5px;margin:0">最难的一类。往往不是一个模型，而是<strong>多个子模型拼成的管线</strong>。</p>
+  <ul>
+    <li><b>主战场</b>：子模型拆分、<code>auto_map</code>、双塔对齐</li>
+    <li><b>最常见坑</b>：<code>auto_map</code> 带 <code>owner/repo--</code> 前缀，离线必炸</li>
+    <li><b>关键心态</b>：别想整体加载，<b>逐个模块加载逐个验证</b></li>
+  </ul>
+</div>
+
+<div class="cat">
+  <h4>语音 <span class="tag ok">19/20</span></h4>
+  <div class="pct">成功率 95%</div>
+  <p style="font-size:13.5px;margin:0">框架极度分散：SpeechBrain / FunASR / FishSpeech / CosyVoice / pyannote…</p>
+  <ul>
+    <li><b>主战场</b>：每个框架一套加载方式</li>
+    <li><b>最常见坑</b>：官方提示"<code>pip install modelscope[audio]</code>"是<b>误导</b>，真因是缺 funasr</li>
+    <li><b>特殊</b>：FFT/STFT 类算子要验证 NPU 实现</li>
+  </ul>
+</div>
+
+<div class="cat">
+  <h4>科学计算 <span class="tag mid">8/10</span></h4>
+  <div class="pct">成功率 80%</div>
+  <p style="font-size:13.5px;margin:0">科研仓库，接口最不统一。<code>ai4s/*</code> 系列小而简单，
+     蛋白质/气象类复杂。</p>
+  <ul>
+    <li><b>主战场</b>：依赖链、数据加载、Paddle 框架</li>
+    <li><b>最常见坑</b>：config 在<b>模块级</b>读数据文件，没有数据就 import 失败</li>
+    <li><b>特殊</b>：HelixFold3 走 Paddle-on-NPU</li>
+  </ul>
+</div>
+
+<div class="cat" style="border-color:#cfe0f7;background:#fbfdff">
+  <h4>跨类的共同点</h4>
+  <div class="pct">不管哪一类都成立</div>
+  <ul style="margin-top:4px">
+    <li>先解决"加载"，再谈"前向"，最后才谈"精度"</li>
+    <li>官方 README 的安装说明常常是错的/过时的</li>
+    <li><code>strict=False</code> 是掩盖问题的最快方式，别用</li>
+  </ul>
+</div>
+
+</div>
+
+<h3>不同类别的"迁移成本"直观对比</h3>
+<table>
+<thead><tr><th>类别</th><th>首次迁移耗时</th><th>主要时间花在</th><th>复用后</th></tr></thead>
+<tbody>
+<tr><td>NLP</td><td>1–3 分钟</td><td>下载权重</td><td>~20 秒</td></tr>
+<tr><td>CV</td><td>2–6 分钟</td><td>装依赖、找权重</td><td>~20 秒</td></tr>
+<tr><td>语音</td><td>3–10 分钟</td><td>认框架、补依赖链</td><td>~30 秒</td></tr>
+<tr><td>多模态</td><td>5–20 分钟</td><td>拆子模型、找构造参数</td><td>~1 分钟</td></tr>
+<tr><td>科学计算</td><td>2–8 分钟</td><td>依赖、数据、特殊框架</td><td>~30 秒</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ============================================================ 七 -->
+<section id="cases">
+<h2><span class="num">07</span>难例专题</h2>
+<p class="lede">七个最典型的"卡了很久最后通了"的案例。每个都浓缩了一类问题的解法。</p>
+
+<div class="case">
+  <div class="case-h"><b>LivePortrait · 多子模型管线</b>
+    <span class="tag e">E 桶</span><span class="meta">129,850,169 参数</span></div>
+  <div class="case-b"><dl>
+    <dt>难点</dt><dd>不是一个模型，是 4 个独立 <code>nn.Module</code>（外观/运动/形变/生成）</dd>
+    <dt>弯路</dt><dd>试着整体加载，各种 <code>missing_keys</code>；还把 <code>warping_module.pth</code>
+        错配给 <code>DenseMotionNetwork</code>（正确类是 <code>WarpingNetwork</code>）</dd>
+    <dt>破法</dt><dd>仓库自带 <code>src/config/models.yaml</code> 给了每个模块的精确构造参数，<b>直接抄，不要猜</b></dd>
+    <dt>结果</dt><dd>4 个模块全部 <code>missing 0 / unexpected 0</code></dd>
+  </dl></div>
+</div>
+
+<div class="case">
+  <div class="case-h"><b>OmniParser · auto_map 的 HF 前缀陷阱</b>
+    <span class="tag e">E 桶</span><span class="meta">517,815,059 参数</span></div>
+  <div class="case-b"><dl>
+    <dt>难点</dt><dd>两个子模型（Florence-2 + YOLO），且 Florence-2 的 config 是新格式</dd>
+    <dt>弯路</dt><dd><code>auto_map</code> 写成 <code>microsoft/Florence-2-base-ft--configuration_florence2</code>，
+        带前缀时 transformers 会去 HF 解析，内网直接 <code>OSError: couldn't connect</code></dd>
+    <dt>破法</dt><dd>① 剥掉 <code>--</code> 前缀只留文件名；② 新格式 <code>text_config/vision_config</code>
+        转成旧格式 <code>florence2_language/florence2_vision</code>；③ YOLO 要 <code>apt install libgl1</code></dd>
+    <dt>结果</dt><dd>两个子模型都加载成功</dd>
+  </dl></div>
+</div>
+
+<div class="case">
+  <div class="case-h"><b>sapiens2 · 代码不存在，从权重重建架构</b>
+    <span class="tag e">E 桶</span><span class="meta">406,601,693 参数</span></div>
+  <div class="case-b"><dl>
+    <dt>难点</dt><dd><code>Sapiens2ForSemanticSegmentation</code> 这个类在公开仓库里根本不存在</dd>
+    <dt>破法</dt><dd>权重键名把架构写得很清楚：DINOv2 式 ViT + RoPE + QK-norm + LayerScale + SwiGLU
+        + 8 个 register token + 4 层 deconv 分割头。照着写了一遍</dd>
+    <dt>关键细节</dt><dd><b>GQA 只出现在中间三分之一</b>（layers 0-7 用 16 头、8-15 用 8 头、16-23 又回 16 头），
+        必须逐层从 <code>wk.weight</code> 形状探测，不能一律假设</dd>
+    <dt>结果</dt><dd><code>strict=True</code> 加载通过，前向输出 <code>(1, 29, 256, 192)</code></dd>
+  </dl></div>
+</div>
+
+<div class="case">
+  <div class="case-h"><b>MiniCPM-V-4.6 · 拆成原生组件</b>
+    <span class="tag e">E 桶</span><span class="meta">1,169,953,840 参数</span></div>
+  <div class="case-b"><dl>
+    <dt>难点</dt><dd>自定义类不存在，看着像"完全没戏"</dd>
+    <dt>转机</dt><dd>拆开看两个部件，<b>居然都是 transformers 原生架构</b>：
+        视觉塔 = SigLIP-SO400M，语言模型 = Qwen3.5 混合线性注意力（<code>qwen3_5_text</code>，
+        transformers 5.5.4 已原生支持）</dd>
+    <dt>破法</dt><dd>删除 checkpoint 里没有的 SigLIP 分类头（11 个模块）；
+        <code>model.language_model.*</code> 映射为 <code>model.*</code>；<code>lm_head</code> 按
+        <code>tie_word_embeddings</code> 绑定到 <code>embed_tokens</code></dd>
+    <dt>结果</dt><dd>视觉 + LLM 都 <code>missing 0</code></dd>
+  </dl></div>
+</div>
+
+<div class="case">
+  <div class="case-h"><b>GLM-Summarization · Megatron + 判反 GLU</b>
+    <span class="tag e">E 桶</span><span class="meta">1,063,799,808 参数</span></div>
+  <div class="case-b"><dl>
+    <dt>难点</dt><dd><code>mp_rank_00_model_states.pt</code>（Megatron 格式），要 SwissArmyTransformer</dd>
+    <dt>连环坑</dt><dd>① SAT 的 PyPI wheel <b>是空壳</b>（只有 dist-info）→ 从源码装；
+        ② <code>megatron-util</code> 目录名带连字符 → <code>ln -s</code>；
+        ③ 从 <code>module</code> 键反推维度；④ 键名要重映射</dd>
+    <dt>卡最久</dt><dd>FFN 尺寸。上投影要 6144、下投影也要 6144 —— 说明是<b>非 GLU</b>
+        （<code>inner=4H, no_glu=1</code>）。我一开始判成 GLU，怎么调都对不上</dd>
+    <dt>结果</dt><dd><code>missing 0 / unexpected 0</code></dd>
+  </dl></div>
+</div>
+
+<div class="case">
+  <div class="case-h"><b>TripoSR · 缺的其实已经有了</b>
+    <span class="tag e">E 桶</span><span class="meta">419,275,628 参数</span></div>
+  <div class="case-b"><dl>
+    <dt>难点</dt><dd>先是 <code>torchmcubes</code>（C++ 扩展）+ <code>rembg</code>（onnxruntime）两个模块级 import 挡住</dd>
+    <dt>第一次修</dt><dd>两个都写了纯 Python 占位 stub（它们只用于导出 mesh 和抠图预处理）</dd>
+    <dt>第二次卡</dt><dd>它还要拉 <code>facebook/dino-vitb16</code>，内网拿不到，一度判定"硬阻塞"</dd>
+    <dt>转机</dt><dd>去查了 <code>model.ckpt</code> 的键 —— <b>DINO 权重本来就在包里</b>
+        （<code>image_tokenizer.*</code> 200 个键）。只缺一份 config</dd>
+    <dt>破法</dt><dd>从权重反推 DINO 配置（hidden 768 / patch 16 / 224 / 12 层 / 12 头），
+        monkeypatch <code>hf_hub_download</code> 让它读本地路径</dd>
+  </dl></div>
+</div>
+
+<div class="case">
+  <div class="case-h"><b>brouhaha · 我判错了"没有权重"</b>
+    <span class="tag e">E 桶</span><span class="meta">3,929,962 参数</span></div>
+  <div class="case-b"><dl>
+    <dt>我最初的判断</dt><dd>"目录里没有 >1MB 的文件，没有权重，无法迁移"</dd>
+    <dt>实际</dt><dd>有 <code>pytorch_model.bin</code>（47 MB，50 个键）。是我扫描时漏了</dd>
+    <dt>破法</dt><dd><code>config.yaml</code> 完整给了架构（SincNet → BiLSTM 256×3 双向 → Linear 128×2），
+        正好对应 <code>pyannote.audio.models.segmentation.PyanNet</code>，按 config 构造</dd>
+    <dt>结果</dt><dd><code>missing 0</code>（6 个 unexpected 是 checkpoint 的 <code>classifier.*</code> 命名差异）</dd>
+  </dl></div>
+</div>
+
+<div class="card warn">
+<h4>这七个案例的共同教训</h4>
+<p><b>"某个依赖拿不到"这句话，在下结论前至少要验证三件事：</b></p>
+<ol>
+<li>它是否<b>真的</b>不在包里（去翻 checkpoint 的键）</li>
+<li>它是否<b>真的</b>不在 PyPI（换个名字查、查官方源）</li>
+<li>它是否<b>真的</b>必需（看它被调用的位置，可能只是导出阶段）</li>
+</ol>
+<p style="margin-top:9px">我在这个项目里因为跳过这三步，<b>至少误判了 6 次</b>。</p>
+</div>
+</section>
+<!-- ============================================================ 八 -->
+<section id="verify">
+<h2><span class="num">08</span>什么算迁移成功</h2>
+<p class="lede">判定标准必须提前定死，否则会不断降低标准说服自己。</p>
+
+<h3>三级判定（本项目实际采用）</h3>
+<table>
+<thead><tr><th style="width:110px">级别</th><th>判定</th><th>证据</th></tr></thead>
+<tbody>
+<tr><td><span class="tag ok">LOAD-OK</span></td><td><b>本项目的"迁移成功"标准</b></td>
+    <td>权重全部加载到位（<code>missing_keys</code> 清零或可解释）+ 在 <code>npu:0</code> 上真的前向一次拿到输出</td></tr>
+<tr><td><span class="tag mid">SMOKE</span></td><td>快速自检</td>
+    <td>小参数前向能跑通、产物落盘。用于验证环境，不比对数值</td></tr>
+<tr><td><span class="tag no">未验证</span></td><td>不算成功</td>
+    <td>"能 import"、"能 to(npu)"、<code>strict=False</code> 吞掉一堆 missing —— 都不算</td></tr>
+</tbody>
+</table>
+
+<div class="card bad">
+<h4>本项目的诚实边界：<b>没有做数值精度对齐</b></h4>
+<p>所有 108 个模型的结论都是"<b>能在 NPU 上加载并前向</b>"，
+<strong>不是</strong>"输出与 GPU 逐位一致"。原因是没有 GPU 基准输出可比。</p>
+<p>所以本文所有"成功"都指 <code>LOAD-OK</code>，不指数值等价。这一点必须写清楚，
+否则交付出去会误导使用者。</p>
+</div>
+
+<h3>三条必须遵守的判定纪律</h3>
+<div class="rule"><b>不要用 <code>strict=False</code> 掩盖问题。</b>它会安静地吞掉几十个 <code>missing_keys</code>，
+模型照跑但结果是随机的。允许用它，但必须<strong>把 missing 数量打出来并逐个解释</strong>。</div>
+<div class="rule"><b>必须在 NPU 上真的前向一次。</b>只做 <code>model.to("npu")</code> 什么也证明不了——
+参数搬过去了不代表算子能跑。</div>
+<div class="rule no"><b>不报错 ≠ 跑对了。</b>NPU 上出现过静默输出 NaN、输出全零的情况。
+至少检查输出 shape 合理、dtype 正常、不是全零。</div>
+
+<h3>怎么验证"真的能复现"</h3>
+<p>最强的一条：<strong>把交付包拿到干净环境里跑一遍</strong>。本项目实测过：</p>
+<pre><code>tar -xzf ai-modelscope-bert-base-cased.tar.gz
+cd ai-modelscope-bert-base-cased
+MODEL_DIR=/data/model_corpus/nlp/AI-ModelScope__bert-base-cased ./run.sh smoke
+
+# 输出
+VERDICT=LOAD-OK  2.6s  device=npu:0
+[run] 完成。产物: .../output
+EXIT_CODE=0</code></pre>
+</section>
+
+<!-- ============================================================ 九 -->
+<section id="deliver">
+<h2><span class="num">09</span>交付物规范</h2>
+<p class="lede">迁移做完不等于交付完成。交付的定义是：<strong>别人换台机器、换个目录，照着就能复现</strong>。</p>
+
+<h3>一个模型一个自包含 tar 包</h3>
+<pre><code>&lt;包名&gt;/
+├── DEPLOY.md              部署报告（怎么部署 + 怎么判定成功）
+├── TEST_REPORT.md         测试报告（测了没、过没过、实测数据）
+├── ADAPTATION.md          迁移根因（为什么这么改，救援过的模型才有）
+├── entry.py               模型专用入口
+├── npu_shim.py            NPU 兼容层（必须随包，不能依赖外部）
+├── run.sh                 一键复现（自动选空闲卡 + 完整/冒烟两种模式）
+├── validate_delivery.py   验收脚本
+└── weights_manifest.json  权重清单（文件名 / 大小 / sha256）</code></pre>
+
+<h3>五条硬规则</h3>
+<table>
+<thead><tr><th style="width:170px">规则</th><th>为什么</th></tr></thead>
+<tbody>
+<tr><td><b>权重不进包</b></td><td>动辄几十 GB。用 <code>MODEL_DIR</code> 环境变量指向，包只带清单和 sha256</td></tr>
+<tr><td><b>路径全用相对</b></td><td><code>run.sh</code> 用 <code>BASH_SOURCE</code> 定位自身，
+    包被拷到任意目录都能跑。写死绝对路径 = 换台机器就废</td></tr>
+<tr><td><b>自动选卡</b></td><td>遍历 0–7 找第一张无进程的卡。写死卡号到别人机器上必然撞车</td></tr>
+<tr><td><b>镜像 tag 显式</b></td><td><code>run.sh</code> / <code>DEPLOY.md</code> 必须指向同一个 <code>name:tag</code>。
+    含糊的 tag 在异地会静默跑错版本</td></tr>
+<tr><td><b>产物可判定</b></td><td>跑完必须留下 <code>entry_result.json</code> 之类的东西，
+    含 <code>loaded</code> / <code>forward_ok</code> / <code>device</code> / 参数量的实测值</td></tr>
+</tbody>
+</table>
+
+<h3>跑完留下的产物长这样</h3>
+<pre><code>{
+  "model": "AI-ModelScope/bert-base-cased",
+  "route": "transformers",
+  "device": "npu:0",
+  "n_params": 108310272,
+  "weight_dtype": "torch.float32",
+  "loaded": true,
+  "forward_ok": true,
+  "forward_sig": "input_ids",
+  "elapsed_s": 2.6
+}</code></pre>
+
+<div class="card">
+<h4>为什么交付物要强调"规则"而不是"现场"</h4>
+<p>写"我在 3 号卡上跑的，耗时 2.6 秒"对别人没用。要写成规则：
+<b>"遍历 0–7 找第一张无进程的卡"</b>、<b>"遍历 NPU 卡，取第一张空闲的"</b>。
+现场数据放 <code>TEST_REPORT.md</code> 留档，通用规则放 <code>DEPLOY.md</code> 作为约定。</p>
+</div>
+</section>
+
+<!-- ============================================================ 十 -->
+<section id="data">
+<h2><span class="num">10</span>数据看板</h2>
+
+<h3>总体</h3>
+<div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-top:6px">
+  <div class="kpi" style="background:#fff;border:1px solid var(--line);color:var(--ink)">
+    <b style="color:var(--green)">117</b><span style="color:var(--muted)">语料模型</span></div>
+  <div class="kpi" style="background:#fff;border:1px solid var(--line);color:var(--ink)">
+    <b style="color:var(--green)">108</b><span style="color:var(--muted)">迁移成功</span></div>
+  <div class="kpi" style="background:#fff;border:1px solid var(--line);color:var(--ink)">
+    <b style="color:var(--green)">92%</b><span style="color:var(--muted)">成功率</span></div>
+  <div class="kpi" style="background:#fff;border:1px solid var(--line);color:var(--ink)">
+    <b style="color:var(--green)">98</b><span style="color:var(--muted)">坑库条目</span></div>
+  <div class="kpi" style="background:#fff;border:1px solid var(--line);color:var(--ink)">
+    <b style="color:var(--green)">110</b><span style="color:var(--muted)">交付包</span></div>
+  <div class="kpi" style="background:#fff;border:1px solid var(--line);color:var(--ink)">
+    <b style="color:var(--green)">32</b><span style="color:var(--muted)">含根因文档</span></div>
+</div>
+
+<h3>分类</h3>
+<table>
+<thead><tr><th>分类</th><th>模型数</th><th>已迁移</th><th>成功率</th><th>进度</th></tr></thead>
+<tbody>
+<tr><td>自然语言处理</td><td>38</td><td>38</td><td><b>100%</b></td>
+    <td><span style="display:inline-block;height:7px;width:100%;max-width:180px;background:#e2e8e4;border-radius:99px;vertical-align:middle"><i style="display:block;height:100%;width:100%;background:#1f7a45;border-radius:99px"></i></span></td></tr>
+<tr><td>语音</td><td>20</td><td>19</td><td><b>95%</b></td>
+    <td><span style="display:inline-block;height:7px;width:100%;max-width:180px;background:#e2e8e4;border-radius:99px;vertical-align:middle"><i style="display:block;height:100%;width:95%;background:#1f7a45;border-radius:99px"></i></span></td></tr>
+<tr><td>计算机视觉</td><td>21</td><td>19</td><td><b>90%</b></td>
+    <td><span style="display:inline-block;height:7px;width:100%;max-width:180px;background:#e2e8e4;border-radius:99px;vertical-align:middle"><i style="display:block;height:100%;width:90%;background:#1f7a45;border-radius:99px"></i></span></td></tr>
+<tr><td>多模态</td><td>28</td><td>24</td><td><b>86%</b></td>
+    <td><span style="display:inline-block;height:7px;width:100%;max-width:180px;background:#e2e8e4;border-radius:99px;vertical-align:middle"><i style="display:block;height:100%;width:86%;background:#1f7a45;border-radius:99px"></i></span></td></tr>
+<tr><td>科学计算</td><td>10</td><td>8</td><td><b>80%</b></td>
+    <td><span style="display:inline-block;height:7px;width:100%;max-width:180px;background:#e2e8e4;border-radius:99px;vertical-align:middle"><i style="display:block;height:100%;width:80%;background:#1f7a45;border-radius:99px"></i></span></td></tr>
+</tbody>
+</table>
+
+<h3>剩余 9 个的归因（都不是"再试一次"能解决的）</h3>
+<table>
+<thead><tr><th>根因</th><th>数量</th><th>模型</th></tr></thead>
+<tbody>
+<tr><td>纯 LoRA，无基座</td><td>2</td><td><code>OminiControl</code>、<code>DimensionX</code></td></tr>
+<tr><td>无代码无镜像</td><td>2</td><td><code>uni-fold-multimer</code>、气象模型</td></tr>
+<tr><td>fairseq 框架级依赖</td><td>3</td><td><code>ofa</code>、<code>mplug</code>、<code>hitea</code></td></tr>
+<tr><td>需 CUDA-only 稀疏卷积</td><td>1</td><td><code>TRELLIS</code>（8 个模型加载了 6 个，卡在 <code>spconv</code>）</td></tr>
+<tr><td>显存超出 8 卡极限</td><td>1</td><td>超 512 GB 的模型（按规则直接报错，不尝试）</td></tr>
+</tbody>
+</table>
+
+<h3>本项目的六次自我纠错</h3>
+<p>数据背后更值得记录的是判断错在哪。这些都是我实际推翻过的结论：</p>
+<table>
+<thead><tr><th style="width:40px">#</th><th>我当时的结论</th><th>真相</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>6 个模型"已迁移"</td><td>只是手工验证过，平台跑不通</td></tr>
+<tr><td>2</td><td>"PaddlePaddle 无 aarch64 wheel"</td><td>官方源有 cp312-aarch64</td></tr>
+<tr><td>3</td><td>"两个模型没有权重"</td><td>扫描漏了 <code>.pdparams</code>/<code>.pdiparams</code></td></tr>
+<tr><td>4</td><td>"<code>megatron_util</code> 不在 PyPI"</td><td>在，只是目录名带连字符</td></tr>
+<tr><td>5</td><td>"<code>SwissArmyTransformer</code> 已安装"</td><td>wheel 是空壳，只有 dist-info</td></tr>
+<tr><td>6</td><td>"GLM 卡在 FFN 尺寸"</td><td>把 GLU 判反了</td></tr>
+</tbody>
+</table>
+
+<div class="card good" style="margin-top:18px">
+<h4>最后一条经验</h4>
+<p><b>六次纠错里，没有一次是靠灵感发现的。</b>全部来自同一个动作——
+<strong>再验一次</strong>：再去 <code>ls</code> 一遍目录、再去 PyPI 换个名字查一遍、再把权重键打出来看一遍。</p>
+<p style="margin-top:8px">所以如果要给这套方法论留一句话：</p>
+<p style="margin-top:8px;font-size:15px;color:var(--green);font-weight:700">
+不是"什么都能修"，而是"知道什么修不了"，以及"<b>敢于推翻自己的判断</b>"。</p>
+</div>
+</section>
+
+<footer>
+  <p><b>模型迁移方法论 · 昇腾 910B</b> · 基于 117 个真实模型的迁移实践</p>
+  <p>数据口径：迁移成功 = 权重加载到位 + 在 NPU 上完成一次前向（<code>LOAD-OK</code>），
+     不含数值精度对齐。坑库 98 条，加载路线 20+ 条，交付包 110 个。</p>
+  <p>生成时间：<span id="ts"></span></p>
+</footer>
+
+</main>
+</div>
+<script>
+document.getElementById('ts').textContent = new Date().toLocaleString('zh-CN');
+// TOC 高亮当前章节
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+  var secs = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function onScroll(){
+    var y = window.scrollY + 120, idx = 0;
+    for (var i=0;i<secs.length;i++){ if (secs[i] && secs[i].offsetTop <= y) idx = i; }
+    links.forEach(function(a,i){ a.style.background = i===idx ? 'var(--mint)' : ''; });
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+})();
+</script>
+</body>
+</html>

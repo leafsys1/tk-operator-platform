@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>一键模型迁移 · 昇腾 910B</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#30363d; --fg:#e6edf3;
+    --dim:#8b949e; --ok:#3fb950; --run:#d29922; --fail:#f85149; --acc:#58a6ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+        padding:18px;margin-bottom:18px}
+  .row{display:flex;gap:10px}
+  input[type=text]{flex:1;background:#0d1117;border:1px solid var(--line);
+        border-radius:8px;padding:11px 13px;color:var(--fg);font-size:14px;outline:none}
+  input[type=text]:focus{border-color:var(--acc)}
+  button{background:var(--acc);color:#04121f;border:0;border-radius:8px;
+        padding:11px 22px;font-size:14px;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .hint{color:var(--dim);font-size:12px;margin-top:9px}
+  .hint code{background:#0d1117;border:1px solid var(--line);border-radius:4px;
+        padding:1px 6px;cursor:pointer}
+  /* 阶段进度 */
+  .stages{display:flex;flex-direction:column;gap:2px}
+  .stage{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:7px}
+  .stage.active{background:#1f6feb1a}
+  .dot{width:11px;height:11px;border-radius:50%;background:#30363d;flex:0 0 auto;
+       transition:background .25s}
+  .dot.ok{background:var(--ok)} .dot.run{background:var(--run);
+       animation:pulse 1.1s infinite} .dot.failed{background:var(--fail)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .sname{font-weight:600;min-width:96px}
+  .smsg{color:var(--dim);font-size:13px;flex:1;overflow:hidden;
+        text-overflow:ellipsis;white-space:nowrap}
+  /* 日志 */
+  #log{background:#010409;border:1px solid var(--line);border-radius:8px;
+       padding:12px;height:260px;overflow-y:auto;font:12px/1.65 ui-monospace,
+       SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
+  .l-ok{color:var(--ok)} .l-run{color:var(--run)} .l-failed{color:var(--fail)}
+  .l-warn{color:#d29922} .l-{color:var(--dim)}
+  .meta{display:flex;gap:16px;flex-wrap:wrap;color:var(--dim);font-size:12px;
+        margin-bottom:12px}
+  .badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;
+        font-weight:600;border:1px solid var(--line)}
+  .badge.fast{color:var(--ok);border-color:#3fb95055;background:#3fb95018}
+  .badge.slow{color:var(--run);border-color:#d2992255;background:#d2992218}
+  .kpi{display:flex;gap:26px;flex-wrap:wrap}
+  .kpi div span{display:block;color:var(--dim);font-size:12px}
+  .kpi div b{font-size:19px;font-weight:600}
+  /* 适配记录 */
+  .res{margin-bottom:14px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .res-h{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#0d1117;
+         cursor:pointer;font-size:13px}
+  .res-h:hover{background:#1f6feb14}
+  .res-h .nm{font-weight:600}
+  .res-h .tag{font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);
+              color:var(--dim)}
+  .res-b{display:none;padding:4px 12px 12px}
+  .res.open .res-b{display:block}
+  .step{display:flex;gap:9px;padding:7px 0;border-top:1px dashed var(--line);font-size:12.5px}
+  .step:first-child{border-top:0}
+  .bk{flex:0 0 auto;width:20px;height:20px;border-radius:5px;background:#1f6feb33;
+      color:var(--acc);font-weight:700;font-size:11px;display:flex;align-items:center;
+      justify-content:center}
+  .bk.auto{background:#3fb95033;color:var(--ok)}
+  .step .tx{flex:1}
+  .step .sym{color:var(--fail);font-family:ui-monospace,monospace;font-size:11.5px}
+  .step .rc{color:var(--dim)}
+  .step .fx{color:var(--fg);margin-top:2px}
+  .step .fx::before{content:"→ ";color:var(--ok)}
+  /* 语料看板 */
+  .bar{display:flex;height:26px;border-radius:6px;overflow:hidden;margin:10px 0 14px;
+       border:1px solid var(--line)}
+  .bar i{display:flex;align-items:center;justify-content:center;font-size:11px;
+         font-style:normal;color:#04121f;font-weight:600}
+  .bar .m{background:#3fb950} .bar .p{background:#d29922} .bar .x{background:#30363d;color:#8b949e}
+  .filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:11px}
+  .filters button{background:#0d1117;border:1px solid var(--line);color:var(--fg);
+       padding:4px 11px;font-size:12px;font-weight:400;border-radius:99px}
+  .filters button.on{background:#1f6feb33;border-color:#1f6feb;color:var(--acc)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:500;font-size:11.5px;position:sticky;top:0;
+     background:var(--panel)}
+  .tag-m{color:var(--ok)} .tag-p{color:var(--run)} .tag-x{color:var(--dim)}
+  .bk2{display:inline-block;width:17px;height:17px;line-height:17px;text-align:center;
+       border-radius:4px;background:#1f6feb33;color:var(--acc);font-size:10.5px;font-weight:700}
+  .scroll{max-height:420px;overflow-y:auto}
+  /* 能力验收 */
+  .cmp{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 12px}
+  .cmp .box{flex:1;min-width:220px;border:1px solid var(--line);border-radius:9px;padding:13px 15px}
+  .cmp .box.fast{border-color:#3fb95055;background:#3fb9500f}
+  .cmp .box.slow{border-color:#d2992255;background:#d299220f}
+  .cmp .box .k{color:var(--dim);font-size:12px;margin-bottom:5px}
+  .cmp .box .v{font-size:25px;font-weight:700;line-height:1.15}
+  .cmp .box.fast .v{color:var(--ok)} .cmp .box.slow .v{color:var(--run)}
+  .cmp .box .sub{color:var(--dim);font-size:11.5px;margin-top:5px}
+  /* 诊断助手 */
+  #diag-in{width:100%;height:74px;background:#010409;border:1px solid var(--line);
+           border-radius:7px;color:var(--fg);padding:9px 11px;font:12px/1.5
+           ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;outline:none}
+  #diag-in:focus{border-color:var(--acc)}
+  .diag-r{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:9px}
+  .diag-r .hd{display:flex;gap:9px;align-items:center;margin-bottom:6px}
+  .diag-r .bk3{background:#1f6feb33;color:var(--acc);font-weight:700;font-size:11px;
+               padding:2px 8px;border-radius:99px}
+  .diag-r .sm{font-size:12.5px;color:var(--fg)}
+  .diag-r .rc{font-size:12px;color:var(--dim);margin-top:4px}
+  .diag-r .dr{font-size:12.5px;color:var(--ok);margin-top:5px}
+  .diag-r .cs{font-size:11.5px;color:var(--dim);margin-top:5px;font-style:italic}
+  .diag-r .sc{color:var(--dim);font-size:11px;margin-left:auto}
+  /* 交付包 */
+  .dl{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:9px;margin-top:9px}
+  .dl .it{border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:12.5px}
+  .dl .it .nm{font-weight:600;color:#58a6ff;word-break:break-all;font-size:12px}
+  .dl .it .mt{color:var(--dim);font-size:11.5px;margin-top:4px}
+  .dl .it .tag2{display:inline-block;background:#3fb95022;color:var(--ok);font-size:10.5px;
+                padding:1px 6px;border-radius:4px;margin-right:5px}
+  .dl .it .tag3{display:inline-block;background:#d2992222;color:var(--run);font-size:10.5px;
+                padding:1px 6px;border-radius:4px;margin-right:5px}
+  .caveat{background:#d2992212;border:1px solid #d2992244;border-radius:7px;
+          padding:9px 12px;font-size:12px;color:#d29922;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>一键模型迁移 · 昇腾 910B</h1>
+  <div class="sub">输入模型名或魔搭链接，后端自动判定「经验快速路径 / 逐步迁移路径」并实时展示阶段进度</div>
+
+  <div class="card">
+    <div class="row">
+      <input id="model" type="text" placeholder="例如 AI-ModelScope/distilbert-base-uncased 或 https://modelscope.cn/models/...">
+      <button id="go">开始迁移</button>
+    </div>
+    <div class="hint">
+      语料库中已有配方：
+      <code data-m="AI-ModelScope/distilbert-base-uncased">AI-ModelScope/distilbert-base-uncased</code>
+      <code data-m="BAAI/bge-small-zh-v1.5">BAAI/bge-small-zh-v1.5</code>
+      <code data-m="iic/cv_resnet50_face-detection_retinaface">iic/cv_resnet50_face-detection_retinaface</code>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="kpi" style="margin-bottom:14px">
+      <div><span>任务</span><b id="k-job">—</b></div>
+      <div><span>路径</span><b id="k-route">—</b></div>
+      <div><span>状态</span><b id="k-status">—</b></div>
+      <div><span>已验证配方</span><b id="k-recipes">—</b></div>
+    </div>
+    <div class="stages" id="stages"></div>
+  </div>
+
+  <div class="card">
+    <div class="meta"><span>实时日志</span><span id="logstate">未开始</span></div>
+    <div id="log"></div>
+  </div>
+
+  <div class="card">
+    <div class="meta">
+      <span>诊断助手 · 粘一条报错，按证据特征匹配坑库</span>
+      <span id="diag-meta">—</span>
+    </div>
+    <textarea id="diag-in" placeholder="例如：ModuleNotFoundError: No module named 'addict'&#10;或点下方「看板」里失败行的「诊断」按钮"></textarea>
+    <div style="margin-top:9px"><button id="diag-go" style="padding:7px 16px;font-size:13px">诊断</button></div>
+    <div id="diag-out"></div>
+  </div>
+
+  <div class="card" id="deliv-card" style="display:none">
+    <div class="meta">
+      <span>交付包 · 每个模型一个自包含目录（model-delivery 规范）</span>
+      <span id="deliv-meta">—</span>
+    </div>
+    <div id="deliv-note" style="font-size:12px;color:#8b949e"></div>
+    <div class="dl" id="deliv-list"></div>
+  </div>
+
+  <div class="card" id="val-card" style="display:none">
+    <div class="meta">
+      <span>能力验收 · 冻结测试集 31 个作为「客户提交」跑平台端到端</span>
+      <span id="val-meta">—</span>
+    </div>
+    <div class="cmp" id="val-cmp"></div>
+    <div id="val-detail" style="font-size:12.5px;color:#8b949e"></div>
+    <div class="caveat" id="val-caveat"></div>
+  </div>
+
+  <div class="card">
+    <div class="meta">
+      <span>语料库迁移总览 · 100 个模型</span>
+      <span id="cov-sum">—</span>
+    </div>
+    <div class="bar" id="cov-bar"></div>
+    <div id="cov-work" style="font-size:12px;color:#8b949e;margin-bottom:10px"></div>
+    <div class="filters" id="cov-filters"></div>
+    <div class="scroll"><table id="cov-table">
+      <thead><tr><th>模型</th><th>类别</th><th>划分</th><th>体积</th><th>状态</th><th>归类 / 路线</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <div class="meta">
+      <span>适配记录 · 逐步迁移路径上我们为客户做了什么</span>
+      <span id="rescount">—</span>
+    </div>
+    <div id="rescues"></div>
+  </div>
+</div>
+
+<script>
+const PHASES = [["resolve","解析模型"],["match_recipe","匹配配方"],
+  ["prepare_env","准备环境"],["adapt","执行适配"],["validate_infer","验证推理"],
+  ["quality","质量判定"],["deliver","归档交付"]];
+const $ = s => document.querySelector(s);
+let stageEls = {}, es = null, lastSeq = 0;
+
+function renderStages(){
+  $("#stages").innerHTML = "";
+  stageEls = {};
+  for (const [k,cn] of PHASES){
+    const d = document.createElement("div");
+    d.className = "stage";
+    d.innerHTML = `<div class="dot"></div><div class="sname">${cn}</div><div class="smsg">待执行</div>`;
+    $("#stages").appendChild(d);
+    stageEls[k] = d;
+  }
+}
+function setStage(phase, status, msg){
+  const d = stageEls[phase]; if(!d) return;
+  const dot = d.querySelector(".dot");
+  dot.className = "dot " + (status||"");
+  d.querySelector(".smsg").textContent = msg || "";
+  document.querySelectorAll(".stage").forEach(x=>x.classList.remove("active"));
+  if (status === "running") d.classList.add("active");
+}
+function log(msg, cls){
+  const el = $("#log");
+  const t = new Date().toLocaleTimeString("zh-CN",{hour12:false});
+  const s = document.createElement("div");
+  s.className = "l-" + (cls||"");
+  s.textContent = `[${t}] ${msg}`;
+  el.appendChild(s); el.scrollTop = el.scrollHeight;
+}
+
+async function loadRecipes(){
+  try{
+    const r = await (await fetch("/api/recipes")).json();
+    $("#k-recipes").textContent = r.count;
+  }catch(e){ $("#k-recipes").textContent = "?"; }
+}
+
+async function start(){
+  const model = $("#model").value.trim();
+  if(!model) return;
+  $("#go").disabled = true;
+  $("#log").innerHTML = ""; lastSeq = 0;
+  renderStages();
+  $("#logstate").textContent = "连接中…";
+  try{
+    const r = await fetch("/api/jobs", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({model})});
+    const j = await r.json();
+    if(j.error){ log("错误：" + j.error, "failed"); $("#go").disabled=false; return; }
+    $("#k-job").textContent = j.job_id.slice(-6);
+    $("#k-status").textContent = "运行中";
+    $("#k-route").textContent = "待判定";
+    log("任务已创建 " + j.job_id);
+    stream(j.job_id);
+  }catch(e){
+    log("请求失败：" + e, "failed"); $("#go").disabled = false;
+  }
+}
+
+function stream(id){
+  es = new EventSource(`/api/jobs/${id}/stream?after=${lastSeq}`);
+  es.onmessage = ev => {
+    const d = JSON.parse(ev.data);
+    if(d.done){
+      $("#k-status").textContent = d.status === "succeeded" ? "成功" : "失败";
+      $("#logstate").textContent = "已结束";
+      log("=== 任务结束：" + d.status + " ===", d.status==="succeeded"?"ok":"failed");
+      es.close(); $("#go").disabled = false; loadRecipes();
+      return;
+    }
+    lastSeq = Math.max(lastSeq, d.seq);
+    setStage(d.phase, d.status, d.message);
+    log(`[${d.phase_cn}] ${d.message}`, d.status);
+    if(d.phase === "match_recipe"){
+      const fast = /命中/.test(d.message);
+      $("#k-route").innerHTML = `<span class="badge ${fast?"fast":"slow"}">${
+        fast?"经验快速路径":"逐步迁移路径"}</span>`;
+    }
+    $("#logstate").textContent = "已连接";
+  };
+  es.onerror = () => { $("#logstate").textContent = "连接中断（可重试）"; };
+}
+
+const BUCKET_CN = {A:"环境依赖", B:"设备API", C:"算子", D:"性能", E:"模型结构"};
+
+async function loadRescues(){
+  try{
+    const r = await (await fetch("/api/rescues")).json();
+    $("#rescount").textContent = r.count + " 个模型已沉淀适配方案";
+    if(!r.count){ $("#rescues").innerHTML = '<div style="color:#8b949e;font-size:13px">暂无</div>'; return; }
+    $("#rescues").innerHTML = r.items.map((it, i) => {
+      const steps = it.steps.map(st => `
+        <div class="step">
+          <div class="bk ${st.auto?"auto":""}" title="${BUCKET_CN[st.bucket]||st.bucket}桶${st.auto?" · 已自动化":" · 需人工"}">${st.bucket}</div>
+          <div class="tx">
+            <div class="sym">${esc(st.symptom)}</div>
+            <div class="rc">根因：${esc(st.root_cause)}</div>
+            <div class="fx">${esc(st.fix)}</div>
+          </div>
+        </div>`).join("");
+      const ev = it.evidence || {};
+      return `<div class="res ${i===0?"open":""}" onclick="this.classList.toggle('open')">
+        <div class="res-h">
+          <span class="nm">${esc(it.model)}</span>
+          <span class="tag">${esc(it.category||"")}</span>
+          <span class="tag">${esc(it.task||"")}</span>
+          <span class="tag">${it.n_steps} 步修复</span>
+          <span class="tag" style="color:#3fb950;border-color:#3fb95055">${esc(ev.verdict||"")}</span>
+          <span style="color:#8b949e;font-size:11px">${ev.elapsed_s?ev.elapsed_s+"s":""}</span>
+        </div>
+        <div class="res-b">${steps}</div>
+      </div>`;
+    }).join("");
+  }catch(e){ $("#rescount").textContent = "加载失败"; }
+}
+function esc(t){ return String(t==null?"":t).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+async function loadValidation(){
+  try{
+    const r = await (await fetch("/api/validation")).json();
+    if(r.error) return;
+    $("#val-card").style.display = "block";
+    const tot = r.total||1;
+    const fastN = r.fast_path||0, slowN = r.slow_path||0;
+    const res = r.results||[];
+    const fastOk = res.filter(x=>x.route==="fast" && x.status==="succeeded").length;
+    const slowOk = res.filter(x=>x.route==="slow" && x.status==="succeeded").length;
+    const pct = (a,b)=> b? Math.round(a*100/b)+"%" : "—";
+    $("#val-meta").textContent =
+      `${r.total} 个模型 · 墙钟 ${(r.wall_clock_s/60).toFixed(1)} 分钟 · ${r.generated_at}`;
+    $("#val-cmp").innerHTML = `
+      <div class="box fast">
+        <div class="k">经验快速路径（配方命中）</div>
+        <div class="v">${pct(fastOk,fastN)}</div>
+        <div class="sub">${fastOk} / ${fastN} 成功 · 直接复用已验证配方</div>
+      </div>
+      <div class="box slow">
+        <div class="k">逐步迁移路径（零经验）</div>
+        <div class="v">${pct(slowOk,slowN)}</div>
+        <div class="sub">${slowOk} / ${slowN} 成功 · 需逐模型写专用入口</div>
+      </div>
+      <div class="box">
+        <div class="k">阶段可视化完整度</div>
+        <div class="v" style="color:#58a6ff">${r.stage_completeness||"—"}</div>
+        <div class="sub">任务覆盖 ≥6 个阶段的比例</div>
+      </div>`;
+    const bad = res.filter(x=>x.route==="slow" && x.status!=="succeeded").slice(0,6);
+    $("#val-detail").innerHTML = bad.length
+      ? "零经验路径的典型失败（已归类）:<br>" + bad.map(x=>
+          `&nbsp;&nbsp;• ${esc(x.model)} — <span style="color:#f85149">${esc((x.error||x.status).slice(0,64))}</span>`).join("<br>")
+      : "";
+    $("#val-caveat").textContent = "⚠️ " + (r.caveat||"");
+  }catch(e){}
+}
+
+async function runDiagnose(err){
+  const box = $("#diag-out");
+  box.innerHTML = '<div style="color:#8b949e;font-size:12.5px;margin-top:8px">匹配中…</div>';
+  try{
+    const r = await (await fetch("/api/diagnose", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({error: err, topn: 3})})).json();
+    $("#diag-meta").textContent = (r.matched||0) + " 条命中";
+    if(!r.matched){
+      box.innerHTML = '<div style="color:#8b949e;font-size:12.5px;margin-top:8px">'
+        + '未命中坑库 —— 属新坑。<b style="color:#d29922">验证修法后请回写坑库</b>（这正是坑库增长的来源）。</div>';
+      return;
+    }
+    box.innerHTML = r.results.map(x => `
+      <div class="diag-r">
+        <div class="hd"><span class="bk3">${x.bucket} · ${esc(x.bucket_cn)}</span>
+          <span class="sc">匹配度 ${x.score}</span></div>
+        <div class="sm">${esc(x.symptom.slice(0,220))}</div>
+        ${x.root_cause?`<div class="rc">根因：${esc(x.root_cause.slice(0,200))}</div>`:""}
+        <div class="dr">→ ${esc((x.direction||"").slice(0,260))}</div>
+        ${x.case?`<div class="cs">代表 case：${esc(x.case.slice(0,160))}</div>`:""}
+      </div>`).join("");
+  }catch(e){ box.innerHTML = '<div style="color:#f85149;font-size:12.5px">请求失败</div>'; }
+}
+
+async function loadPitfallCount(){
+  try{
+    const r = await (await fetch("/api/pitfalls")).json();
+    $("#diag-meta").textContent = "坑库 " + r.count + " 条";
+  }catch(e){}
+}
+
+async function loadDeliveries(){
+  try{
+    const r = await (await fetch("/api/deliveries")).json();
+    if(!r.count) return;
+    $("#deliv-card").style.display = "block";
+    $("#deliv-meta").textContent = r.count + " 个交付包";
+    $("#deliv-note").textContent = r.note || "";
+    $("#deliv-list").innerHTML = r.items.map(x=>`
+      <div class="it">
+        <div class="nm">${esc(x.package)}</div>
+        <div class="mt">
+          <span class="${x.verdict==="PASS"?"tag2":"tag3"}">${esc(x.verdict||"—")}</span>
+          ${x.has_adaptation?'<span class="tag3">含迁移根因</span>':""}
+          ${esc(x.elapsed||"—")} · ${esc((x.arch||"—").slice(0,22))}
+        </div>
+        <div class="mt">DEPLOY · TEST_REPORT · run.sh${x.has_adaptation?" · ADAPTATION":""}${x["validate_delivery.py"]?" · 校验器":""}</div>
+      </div>`).join("");
+  }catch(e){}
+}
+
+let COV = null, covFilter = "", covCat = "";
+const BK_CN = {A:"环境/依赖", B:"设备API", C:"算子", D:"性能", E:"模型结构/入口缺失", "?":"待归类"};
+
+async function loadCorpus(){
+  try{
+    const r = await (await fetch("/api/corpus")).json();
+    COV = r;
+    const st = r.status_count || {};
+    const m = st.migrated||0, f = st.failed||0, u = st.unprobed||0,
+          x = st.missing||0, tot = r.total||1;
+    $("#cov-sum").textContent =
+      `已迁移 ${m} · 探针失败 ${f} · 待探针 ${u}${x?" · 未下载 "+x:""}（训练 ${r.train} / 测试 ${r.test}）`;
+    $("#cov-bar").innerHTML =
+      `<i class="m" style="width:${m*100/tot}%">${m?m:""}</i>` +
+      `<i class="p" style="width:${f*100/tot}%">${f?f:""}</i>` +
+      `<i style="width:${u*100/tot}%;background:#1f6feb" >${u?u:""}</i>` +
+      `<i class="x" style="width:${x*100/tot}%">${x?x:""}</i>`;
+    const bc = r.bucket_count || {};
+    const cats = Object.keys(r.by_category || {});
+    $("#cov-filters").innerHTML =
+      [["", "全部 " + tot], ["migrated","已迁移 "+m], ["failed","探针失败 "+f],
+       ["unprobed","待探针 "+u]].concat(x?[["missing","未下载 "+x]]:[])
+        .map(([k,l]) => `<button data-f="${k}" class="${k===covFilter?"on":""}">${l}</button>`).join("") +
+      `<span style="width:12px"></span>` +
+      [["", "全部类别"]].concat(cats.map(c=>[c,c])).map(([k,l]) =>
+        `<button data-c="${k}" class="${k===covCat?"on":""}">${l}</button>`).join("") +
+      (Object.keys(bc).length ? `<span style="color:#8b949e;font-size:11.5px;margin-left:6px">` +
+        Object.entries(bc).map(([k,v])=>`${k}桶 ${v}`).join(" · ") + `</span>` : "");
+    $("#cov-filters").querySelectorAll("button").forEach(b=>{
+      b.onclick = () => {
+        if(b.dataset.f !== undefined && b.dataset.f !== "") { covFilter = b.dataset.f; covCat=""; }
+        else if(b.dataset.f === "") { covFilter=""; }
+        if(b.dataset.c !== undefined) { covCat = b.dataset.c; covFilter=""; }
+        renderCorpus();
+      };
+    });
+    const w = r.workload || {};
+    const est = w.by_bucket_estimate || {};
+    $("#cov-work").innerHTML =
+      (w.measured && w.measured.length
+        ? "实测修复耗时（不含诊断）：" + w.measured.filter(m=>m.fix_seconds)
+            .map(m=>`<b style="color:#3fb950">${m.fix_seconds}s</b> ${esc(m.model)}（${esc(m.kind)}）`).join(" · ")
+        : "") +
+      (Object.keys(est).length
+        ? `<br>各桶量级参考：` + Object.entries(est).map(([k,v])=>`<b>${k}</b> ${esc(v)}`).join(" ｜ ")
+        : "");
+    renderCorpus();
+  }catch(e){ $("#cov-sum").textContent = "加载失败"; }
+}
+
+function renderCorpus(){
+  if(!COV) return;
+  let items = COV.items || [];
+  if(covFilter) items = items.filter(x=>x.status===covFilter);
+  if(covCat) items = items.filter(x=>x.category===covCat);
+  const tag = {migrated:['tag-m','已迁移'], failed:['tag-p','探针失败'],
+               unprobed:['tag-x','待探针'], missing:['tag-x','未下载']};
+  $("#cov-table").querySelector("tbody").innerHTML = items.map(x=>{
+    const [cls,lab] = tag[x.status] || ['tag-x', x.status];
+    const extra = x.status==="migrated"
+      ? `<span style="color:#8b949e">${esc(x.route||"")}</span>`
+      : (x.bucket ? `<span class="bk2">${x.bucket}</span> <span style="color:#8b949e" title="${esc(x.reason||"")}">${esc((x.reason||"").slice(0,50))}</span>`
+          + `<button class="mini" data-err="${esc((x.reason||"").slice(0,300))}" style="margin-left:6px;padding:1px 8px;font-size:11px;background:#1f6feb33;color:#58a6ff;border:1px solid #1f6feb55;border-radius:5px;cursor:pointer">诊断</button>`
+        : "");
+    return `<tr><td>${esc(x.model)}</td><td>${esc(x.category)}</td><td>${esc(x.split)}</td>
+      <td>${x.gb!=null?x.gb+"G":"—"}</td><td class="${cls}">${lab}</td><td>${extra}</td></tr>`;
+  }).join("") || `<tr><td colspan="6" style="color:#8b949e">无匹配</td></tr>`;
+}
+
+$("#diag-go").onclick = () => {
+  const v = $("#diag-in").value.trim();
+  if(v) runDiagnose(v);
+};
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("button.mini");
+  if(b && b.dataset.err){
+    $("#diag-in").value = b.dataset.err;
+    runDiagnose(b.dataset.err);
+    window.scrollTo({top: 0, behavior: "smooth"});
+  }
+});
+
+document.querySelectorAll(".hint code").forEach(c=>{
+  c.onclick = () => { $("#model").value = c.dataset.m; };
+});
+$("#go").onclick = start;
+$("#model").addEventListener("keydown", e => { if(e.key === "Enter") start(); });
+renderStages(); loadRecipes(); loadRescues(); loadCorpus(); loadValidation(); loadPitfallCount(); loadDeliveries();
+</script>
+</body>
+</html>

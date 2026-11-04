@@ -1,0 +1,7 @@
+# op-agent 流式原型：把 opx-typewriter 插件插进 profile。
+# `name` 是相对路径，锚定在**本 patch 文件旁** → ./opx-typewriter/index.mjs
+# 用法：dsh --profile headless --patch ops/dsh/llm-opencode-go.patch.yml \
+#           --patch ops/dsh/opx-typewriter.patch.yml "<任务>"
+- insert:
+    - id: opx-typewriter
+      name: ./opx-typewriter/index.mjs
