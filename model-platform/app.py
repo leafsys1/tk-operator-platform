@@ -1322,29 +1322,47 @@ def _persist_recipe(job_id, c, model, cat, mdir, agent_res, entry_state, entry_s
         "entry_state": entry_state, "entry_sha16": entry_sha,
         "verified_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "verified_by_job": job_id,
+        # 用 None 而不是 {"used": False}：远端合并脚本对 None 会跳过，
+        # 于是「回放这次没调 agent」不会把上一次真实的 agent 记录擦掉
+        # （实测第二次回放把 agent 字段清成了 null，审计信息丢了）。
         "agent": ({"used": True, "turns": (agent_res or {}).get("turns"),
                    "root_cause": ((agent_res or {}).get("root_cause") or "")[:300],
                    "fix": ((agent_res or {}).get("fix") or "")[:600],
                    "llm": (agent_res or {}).get("llm")}
-                  if agent_res and agent_res.get("ok") else {"used": False}),
+                  if agent_res and agent_res.get("ok") else None),
+        "last_run": {"job": job_id, "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                     "path": "agent" if (agent_res and agent_res.get("ok")) else "replay",
+                     "agent_turns": (agent_res or {}).get("turns") if agent_res else 0},
     }
+    # 基线必须是 recipe.json 而不是 probe.json：
+    # recipe 是"怎么跑通的"权威记录（含历史 agent 修法、环境指纹），
+    # probe 只是最近一次探针的原始输出。以 probe 为基线会把历史信息冲掉
+    # （实测第二次回放把 agent 字段清空，审计证据丢失）。
     py = (
         "import base64,json,os,sys\n"
         "d=sys.argv[1]\n"
         "p=json.loads(base64.b64decode(sys.argv[2]).decode())\n"
-        "pj=os.path.join(d,'probe.json')\n"
-        "cur={}\n"
-        "if os.path.isfile(pj):\n"
-        "    try: cur=json.load(open(pj,encoding='utf-8'))\n"
-        "    except Exception: cur={}\n"
-        "out=dict(cur)\n"
+        "def rd(f):\n"
+        "    fp=os.path.join(d,f)\n"
+        "    if not os.path.isfile(fp): return {}\n"
+        "    try: return json.load(open(fp,encoding='utf-8')) or {}\n"
+        "    except Exception: return {}\n"
+        "recipe=rd('recipe.json'); probe=rd('probe.json')\n"
+        "out=dict(recipe)\n"
+        "# 探针事实用最新一次的（这些是会随环境/入口变化的值）\n"
+        "FRESH=('loaded','route','verdict','elapsed_s','device','n_params','model',\n"
+        "       'source','metrics','caveat','category','entry_state','autodeps',\n"
+        "       'authoritative','note')\n"
+        "for k in FRESH:\n"
+        "    if k in probe and probe[k] is not None: out[k]=probe[k]\n"
+        "if 'loaded' not in out: out['loaded']=bool(probe.get('loaded'))\n"
         "for k,v in p.items():\n"
         "    if v is not None: out[k]=v\n"
-        "out['loaded']=bool(cur.get('loaded'))\n"
         "if not out.get('model'): out['model']=p.get('model')\n"
         "json.dump(out, open(os.path.join(d,'recipe.json'),'w',encoding='utf-8'),\n"
         "          ensure_ascii=False, indent=2)\n"
-        "print('RECIPE_OK loaded=%s route=%s' % (out.get('loaded'), out.get('route')))\n")
+        "print('RECIPE_OK loaded=%s route=%s agent=%s'\n"
+        "      % (out.get('loaded'), out.get('route'), (out.get('agent') or {}).get('used')))\n")
     b64py = base64.b64encode(py.encode()).decode()
     b64p = base64.b64encode(json.dumps(payload, ensure_ascii=False).encode()).decode()
     d_remote = "%s/_probe/%s" % (REMOTE_ROOT, name)
@@ -1643,8 +1661,22 @@ def run_migration(job_id, model):
             if _st[0] == "SYNCED":
                 emit(c, job_id, "deliver", "ok",
                      "交付包入口已按语料目录更新（旧包里的入口和现在跑通的不一致）")
-            rc3, out3 = npu("ls %s/_delivery/%s 2>/dev/null | wc -l" % (REMOTE_ROOT, pkg), 60)
-            have_remote = rc3 == 0 and out3.strip().isdigit() and int(out3.strip()) > 0
+            # make_delivery.py 是**全量重建**（实测重建 100+ 个包要跑几分钟），
+            # 它跑到哪一步决定了我们的包此刻在不在 —— 立刻检查会撞上"还没轮到"。
+            # 所以在算力机上等它落地（最多 150s），而不是查一次就下结论。
+            have_remote = False
+            _deadline = time.time() + 150
+            while time.time() < _deadline:
+                rc3, out3 = npu("ls %s/_delivery/%s 2>/dev/null | wc -l"
+                                % (REMOTE_ROOT, pkg), 60)
+                if rc3 == 0 and out3.strip().isdigit() and int(out3.strip()) > 0:
+                    have_remote = True
+                    break
+                time.sleep(5)
+            if not have_remote:
+                emit(c, job_id, "deliver", "warn",
+                     "等了 150s 仍没等到 %s 的交付包（make_delivery.py 可能还在重建，"
+                     "或被它的 timeout 300 打断）" % pkg)
             if have_remote:
                 p_rs = subprocess.run(
                     ["rsync", "-az", "-e", _ssh_e(),

@@ -173,7 +173,23 @@
 目录型给 `_entry_out/` 子目录、文件型给文件路径，产物统一回收到 `$OUT`。
 两个真实入口各验一次：Florence-2 → 目录约定，GroundVTS → 文件约定。
 
-### 2.6.4 附带：`start.sh stop` 会因过期 pid 文件假停
+### 2.6.4 `make_delivery.py` 是全量重建，不是只生成一个包
+
+每个任务走到「生成交付包」都会调 `make_delivery.py`，而它是**遍历
+`_manifest/corpus_status.json` 重建全部包**（实测重建 100+ 个要 3–5 分钟，占用一整核）。
+后果：
+
+- 刚生成的包在重建过程中会短暂消失/重建，此时去 `ls _delivery/<pkg>` 会误判「没生成」；
+- 它的 `timeout 300` 可能把重建打断，留下半棵树。
+
+修法（本次）：检查包里改为**在算力机上等它落地（最多 150s，5s 轮询）**，
+超时才报 warn 并明说「可能还在重建」；rsync 失败也不再静默。
+
+另注：算力机上还有同事的批处理脚本（`_tools/final_accept.sh`、`deep_all.sh`、
+`batch_rescue.sh`）也在动 `_delivery` 与 `_manifest`。平台与它们**没有互斥**，
+本平台只按自己的包名 rsync 回本地镜像，不会删别人的包，但别人的全量重建会覆盖同名包。
+
+### 2.6.5 附带：`start.sh stop` 会因过期 pid 文件假停
 
 `server.pid` 指向旧进程时 `stop` 只打一句「未在运行」就退出，端口仍被占，新实例
 `EADDRINUSE` 启动失败、旧代码继续服务（实测出现「改了代码但 `/api/agent` 报的还是旧行为」）。

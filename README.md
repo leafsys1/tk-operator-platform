@@ -139,14 +139,14 @@ git log --oneline v0.1.0..HEAD        # 相对某个基线改了什么
 git diff v0.1.0 -- shell/gateway.py   # 只看网关改动
 ```
 
-当前基线 `v0.1.4` 的文件指纹（与生产机实测一致，可用于核对是否漂移）：
+当前基线 `v0.1.5` 的文件指纹（与生产机实测一致，可用于核对是否漂移）：
 
 | 文件 | SHA-256 前 16 位 |
 |---|---|
 | `shell/gateway.py` | `d358897b5921527e` |
 | `shell/portal.html` | `78fb21207384477d` |
 | `shell/tanku-logo.png` | `cd75e9b829711b8c` |
-| `model-platform/app.py` | `479c1082535c2769`（2117 行） |
+| `model-platform/app.py` | `26c3dbfcd0e2ffdd`（2149 行） |
 | `model-platform/agent_bridge.py` | `6ab4d173c2bd90a1`（392 行，新增） |
 | `model-platform/static/index.html` | `78c980811b37fd41` |
 | `model-platform/start.sh` | `stop` 支持按端口反查（见 known-issues 2.6.4） |
@@ -165,7 +165,7 @@ git diff v0.1.0 -- shell/gateway.py   # 只看网关改动
 cd shell && python3 -m pytest tests -q        # 42 passed, 3 subtests (4.4s)
 cd ../operator/backend && python -m pytest -q # 571 collected, rc=0
 cd ../model-platform && python3 -m unittest discover -s tests -v   # 32 passed（Agent 层/路线判定/沙箱边界）
-python3 -c "import ast;ast.parse(open('../model-platform/app.py').read())"   # OK, 2117 行
+python3 -c "import ast;ast.parse(open('../model-platform/app.py').read())"   # OK, 2149 行
 ```
 
 需要在算力机上跑测试时，用 `control-venv312` 里的解释器（它带齐了 pytest 与后端依赖）。
