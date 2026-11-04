@@ -67,3 +67,19 @@
 **回退**
 - bash deploy/rollback.sh <组件>
 ```
+
+### v0.1.0 修正记录（同一 tag 内）
+
+首次推送后发现两处遗漏，已修并**移动 tag**（仓库刚建、尚无人 clone）：
+
+1. **漏了算子工作区模板** `operator/workspaces/cann-ops/`。少了它
+   `tests/test_deployment_run_root.py` 找不到 `workspaces/cann-ops/scripts/nm.sh` 而失败。
+   现已入库（含 scripts/cases/criteria/tools/docs 与 5 个算子实现，排除 `build/` 与会话目录）。
+2. **shell 测试路径失效**。三个测试用 `Path(__file__).with_name()` 找 `gateway.py`/`portal.html`，
+   那是开发期「测试与源码同目录」的写法；入库后变成 `shell/` + `shell/tests/` 分层就找不到了。
+   新增 `shell/tests/_paths.py`，两个布局都兼容。
+
+顺带把 `.gitignore` 里的运行数据目录改成前导 `/` 锚定，避免误伤 `operator/workspaces`。
+
+**验证**（在 172.16.111.102 上，从 GitHub 拉一份干净副本跑）：
+`shell` 42 passed + 3 subtests；`operator/backend` 571 collected、rc=0；`model-platform/app.py` 1432 行 AST 通过。

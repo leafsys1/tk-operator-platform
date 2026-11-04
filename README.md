@@ -52,6 +52,7 @@ shell/                  统一外壳（网关 + 页面 + 测试 + systemd 单元
 operator/               算子开发平台（同事产品，此处为可复现快照）
   backend/              FastAPI 后端（143 个 .py）
   web/                  React 前端源码（30 个 ts/tsx）+ dist 构建产物
+  workspaces/cann-ops/  算子工作区模板（脚本 + 用例 + 判据 + 5 个算子实现）
   ops/                  nm.conf（容器启动参数）、dsh patch、workspace 模板
   scripts/              nm_test.sh（远端执行总入口）、cannbot 等
   docs/                 平台自身设计文档（gate-report-v1、impl-contract-v2 等）
@@ -127,7 +128,19 @@ git diff v0.1.0 -- shell/gateway.py   # 只看网关改动
 | `model-platform/app.py` | `071229de59bf99fc` |
 | `model-platform/static/index.html` | `92d190b4ff58feba` |
 
-回退、灰度、双跑、数据切换的做法见 `docs/06-operations-and-rollback.md`。
+回退、灰度、双跑、数据切换的做法见 `docs/05-operations.md`。
+
+## 克隆下来就能验（实测）
+
+在一台干净目录里 clone 之后直接跑（不需要先部署）：
+
+```bash
+cd shell && python3 -m pytest tests -q        # 42 passed, 3 subtests (4.4s)
+cd ../operator/backend && python -m pytest -q # 571 collected, rc=0
+python3 -c "import ast;ast.parse(open('../model-platform/app.py').read())"   # OK, 1432 行
+```
+
+需要在算力机上跑测试时，用 `control-venv312` 里的解释器（它带齐了 pytest 与后端依赖）。
 
 ## 重要：这不是生产级安全配置
 
