@@ -1127,8 +1127,15 @@
     const td = 'padding:6px 8px;vertical-align:top;white-space:normal !important;'
       + 'word-break:break-word !important;overflow-wrap:anywhere !important;'
       + 'color:#333;font-size:12px;border-bottom:1px solid rgba(20,26,46,.06)';
+    // 关键：回放任务没有调 agent，这里列出的是"这条复现包当初怎么被救通"的记录。
+    // 不加来源说明就会和「不调用 Agent」的路线文案自相矛盾（实测评审会当成 bug）。
+    let used = false;
+    try { used = !!(JSON.parse(job.result_json || '{}') || {}).agent_used; } catch (e) { /* ignore */ }
+    const head = used
+      ? 'Agent 介入记录 · 本次任务'
+      : 'Agent 介入记录 · 复现包生成过程（本次回放未调用 Agent）';
     box.innerHTML = '<div class="tiny-label" style="margin-top:14px">'
-      + `<span>Agent 介入记录</span><span class="hint">共 ${d.turns} 轮动作</span></div>`
+      + `<span>${head}</span><span class="hint">共 ${d.turns} 轮动作</span></div>`
       + '<div style="max-height:230px;overflow:auto;margin-top:6px;'
       + 'border:1px solid rgba(20,26,46,.10);border-radius:9px;background:#fff">'
       + '<table style="width:100%;border-collapse:collapse;table-layout:fixed">'

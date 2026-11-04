@@ -139,7 +139,7 @@ git log --oneline v0.1.0..HEAD        # 相对某个基线改了什么
 git diff v0.1.0 -- shell/gateway.py   # 只看网关改动
 ```
 
-当前基线 `v0.1.5` 的文件指纹（与生产机实测一致，可用于核对是否漂移）：
+当前基线 `v0.1.6` 的文件指纹（与生产机实测一致，可用于核对是否漂移）：
 
 | 文件 | SHA-256 前 16 位 |
 |---|---|
@@ -148,7 +148,7 @@ git diff v0.1.0 -- shell/gateway.py   # 只看网关改动
 | `shell/tanku-logo.png` | `cd75e9b829711b8c` |
 | `model-platform/app.py` | `26c3dbfcd0e2ffdd`（2149 行） |
 | `model-platform/agent_bridge.py` | `6ab4d173c2bd90a1`（392 行，新增） |
-| `model-platform/static/index.html` | `78c980811b37fd41` |
+| `model-platform/static/index.html` | `f724cb7368266d87` |
 | `model-platform/start.sh` | `stop` 支持按端口反查（见 known-issues 2.6.4） |
 | `compute-side/_probe/probe.sh` | 入口 `--out` 两种约定自适应（见 known-issues 2.6.3） |
 | `compute-side/_probe/agent_exec.sh` | 新增，agent 的 `run_py` 入口 |
