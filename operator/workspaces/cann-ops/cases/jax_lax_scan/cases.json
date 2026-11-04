@@ -1,0 +1,97 @@
+{
+  "schema": "opx-cases/1",
+  "op": "jax_lax_scan",
+  "spec_version": 1,
+  "criteria_ref": "ops-precision-standard@1",
+  "runtime": {
+    "python": "3.11",
+    "jax": "0.8.1",
+    "backend": "xla-npu/AFIR",
+    "oracle": "同版本 JAX CPU"
+  },
+  "case_groups": ["常规", "反向扫描", "pytree", "可选输入", "自动微分", "异常"],
+  "cases": [
+    {
+      "case_id": "scan_sum_len8_f32",
+      "group": "常规",
+      "required": true,
+      "shape": [8, 16],
+      "dtype": "float32",
+      "seed": 20261026,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "加法 carry 与 stacked ys；值、shape、dtype 与 CPU oracle 一致"
+    },
+    {
+      "case_id": "scan_reverse_len7_f32",
+      "group": "反向扫描",
+      "required": true,
+      "shape": [7, 5],
+      "dtype": "float32",
+      "seed": 20261026,
+      "reverse": true,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "非 2 次幂长度，确认 reverse 输出顺序"
+    },
+    {
+      "case_id": "scan_pytree_carry",
+      "group": "pytree",
+      "required": true,
+      "length": 6,
+      "dtype": "float32",
+      "seed": 20261026,
+      "carry": "tuple(counter:int32, accumulator:float32[4])",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "结构、叶子 shape/dtype 和数值全部一致"
+    },
+    {
+      "case_id": "scan_pytree_xs",
+      "group": "pytree",
+      "required": true,
+      "length": 6,
+      "dtype": "float32",
+      "seed": 20261026,
+      "xs": "dict(add:float32[6,4], scale:float32[6,4])",
+      "body": "pytree_xs_add_scale",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "xs 为 pytree；结构、前导长度、叶子 shape/dtype 与数值均与同版本 JAX CPU 一致"
+    },
+    {
+      "case_id": "scan_xs_none_length5",
+      "group": "可选输入",
+      "required": true,
+      "length": 5,
+      "dtype": "float32",
+      "xs": null,
+      "body": "none_input_increment",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "xs=None 时显式 length=5；body 接收 x=None，final_carry 和 stacked ys 与同版本 JAX CPU 一致"
+    },
+    {
+      "case_id": "scan_jvp_vjp",
+      "group": "自动微分",
+      "required": true,
+      "shape": [5, 4],
+      "dtype": "float32",
+      "seed": 20261026,
+      "mode": ["jvp", "vjp"],
+      "expected": "match_cpu_or_explicit_unsupported",
+      "note": "支持则梯度与 CPU 一致；后端不支持必须稳定分类，不能记 PASS"
+    },
+    {
+      "case_id": "scan_bad_carry_shape",
+      "group": "异常",
+      "required": true,
+      "length": 3,
+      "dtype": "float32",
+      "mode": ["jit"],
+      "expected": "reject",
+      "expect_reject_code": "carry_shape_mismatch",
+      "note": "body 改变 carry shape，必须在 trace/编译期明确拒绝"
+    }
+  ]
+}

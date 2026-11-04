@@ -1,0 +1,92 @@
+{
+  "schema": "opx-cases/1",
+  "op": "jax_lax_scan",
+  "spec_version": 1,
+  "criteria_ref": "ops-precision-standard@1",
+  "provenance": "0-黑盒测试设计.md §5.4",
+  "note": "补充用例在用户确认入集前只由 pytest 入口执行，不计入门禁 cases.json 的 7 条/13 次计数；判据与门禁同源。",
+  "cases": [
+    {
+      "case_id": "scan_sup_rev_pytree_len6",
+      "group": "pytree",
+      "required": true,
+      "length": 6,
+      "width": 4,
+      "dtype": "float32",
+      "seed": 20261026,
+      "reverse": true,
+      "carry": "tuple(counter:int32, accumulator:float32[4])",
+      "fixture": "B3_pytree",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "reverse × pytree；fixture=B3_pytree"
+    },
+    {
+      "case_id": "scan_sup_len1_f32",
+      "group": "边界",
+      "required": true,
+      "shape": [1, 16],
+      "dtype": "float32",
+      "seed": 20261026,
+      "fixture": "B1_add",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "length=1 最小循环；fixture=B1_add"
+    },
+    {
+      "case_id": "scan_sup_len1_reverse_f32",
+      "group": "边界",
+      "required": true,
+      "shape": [1, 16],
+      "dtype": "float32",
+      "seed": 20261026,
+      "reverse": true,
+      "fixture": "B1_add",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "length=1 且 reverse；fixture=B1_add"
+    },
+    {
+      "case_id": "scan_sup_naninf_len8",
+      "group": "特殊值",
+      "required": true,
+      "length": 8,
+      "width": 4,
+      "dtype": "float32",
+      "seed": 20261026,
+      "fixture": "B1_add",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "xs[2,0]=nan, xs[3,1]=+inf, xs[4,2]=-inf, xs[5,3]=-0.0，其余 uniform(-1,1)；fixture=B1_add"
+    },
+    {
+      "case_id": "scan_sup_bad_carry_dtype",
+      "group": "异常",
+      "required": true,
+      "length": 3,
+      "width": 4,
+      "dtype": "float32",
+      "seed": 20261026,
+      "carry": "int32[4]",
+      "fixture": "B6_bad_dtype",
+      "mode": ["jit"],
+      "expected": "reject",
+      "expect_reject_code": "carry_shape_mismatch",
+      "note": "body 把 carry dtype 改成 float32；fixture=B6_bad_dtype"
+    },
+    {
+      "case_id": "scan_sup_bad_carry_struct",
+      "group": "异常",
+      "required": true,
+      "length": 3,
+      "width": 4,
+      "dtype": "float32",
+      "seed": 20261026,
+      "fixture": "B7_bad_struct",
+      "mode": ["jit"],
+      "expected": "reject",
+      "expect_reject_code": "carry_shape_mismatch",
+      "note": "body 把单叶子 carry 改成 (carry, carry)；fixture=B7_bad_struct"
+    }
+  ]
+}

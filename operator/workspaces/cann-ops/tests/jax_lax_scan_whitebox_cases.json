@@ -1,0 +1,58 @@
+{
+  "schema": "opx-cases/1",
+  "op": "jax_lax_scan",
+  "spec_version": 1,
+  "criteria_ref": "ops-precision-standard@1",
+  "provenance": ".cannbot/jax_lax_scan/workflow1/3-白盒测试设计.md §源码分支清单 / §白盒用例与框架接入",
+  "note": "白盒用例：按当前源码（op_kernel/jax_lax_scan_kernel.asc、op_host/jax_lax_scan_pyapi.asc、python/jax_lax_scan.py、python/jax_lax_scan_cli.py）的有效分支反推需求范围内输入；只补未命中的源码分支，不重复黑盒已覆盖组合。与冻结 cases.json 同 schema、同 golden、同 criteria/check.py 判据；经 tests/test_jax_lax_scan.py 统一发现并在 test.sh 第二段执行，不计入门禁 cases.json 的 7 条/13 次。",
+  "cases": [
+    {
+      "case_id": "scan_wb_w1_len4_f32",
+      "group": "白盒-对齐",
+      "required": true,
+      "shape": [4, 1],
+      "dtype": "float32",
+      "seed": 20261026,
+      "fixture": "B1_add",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "白盒 K1/K17：width=1 触发 alignedWidth=ceil(1/8)*8=8（UB 分配 32B）而计算 count=1、DataCopyPad blockLen=4B；黑盒最小宽度是 4/5，未命中 width<8 且 non-32B blockLen 的最坏情况"
+    },
+    {
+      "case_id": "scan_wb_w8_len4_f32",
+      "group": "白盒-对齐",
+      "required": true,
+      "shape": [4, 8],
+      "dtype": "float32",
+      "seed": 20261026,
+      "fixture": "B1_add",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "白盒 K1：width == SCAN_UB_ALIGN_ELEMS(8) 的对齐边界，alignedWidth=8 且 blockLen=32B 恰好对齐（(8+7)/8*8 == 8，无 padding）"
+    },
+    {
+      "case_id": "scan_wb_w9_len4_f32",
+      "group": "白盒-对齐",
+      "required": true,
+      "shape": [4, 9],
+      "dtype": "float32",
+      "seed": 20261026,
+      "fixture": "B1_add",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "白盒 K1：width=9 跨过 8 元素对齐块，alignedWidth=16 而 blockLen=36B；校验 padding 元素不参与计算、ys 每步行偏移 36B 非 32B 对齐时不串位"
+    },
+    {
+      "case_id": "scan_wb_quad_len6_w8",
+      "group": "白盒-body分支",
+      "required": true,
+      "shape": [6, 8],
+      "dtype": "float32",
+      "seed": 20261026,
+      "fixture": "B4_quad",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "白盒 K14：body_id=3 的 SCAN_BODY_QUAD 内核分支（Muls 0.5*carry → Add x → Adds 写回 carry → Mul y=new*new）。该 body 此前只在 scan_jvp_vjp 的 AD trace 路径出现（abi_calls=0），.so 内核分支 0 命中；同时覆盖 width=8 对齐"
+    }
+  ]
+}

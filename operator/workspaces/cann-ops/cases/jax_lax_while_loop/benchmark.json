@@ -1,0 +1,39 @@
+{
+  "schema": "opx-benchmark/1",
+  "op": "jax_lax_while_loop",
+  "runtime": {
+    "python": "3.11",
+    "jax": "0.8.1",
+    "backend": "xla-npu/AFIR"
+  },
+  "measure": {
+    "scope": "blocking_jit_execution",
+    "warm_up": 3,
+    "invocations": 10,
+    "aggregate": "median",
+    "synchronize": "block_until_ready",
+    "threshold": null,
+    "purpose": "baseline_only"
+  },
+  "primary_case": "while_long_large_tensor",
+  "cases": [
+    {
+      "case_id": "while_short_small_carry",
+      "required": true,
+      "carry": "tuple(int32 scalar step, float32[16])",
+      "iterations": 4,
+      "body": "step + 1, value * 1.03125 + 0.125",
+      "dtype": "float32",
+      "seed": 20261029
+    },
+    {
+      "case_id": "while_long_large_tensor",
+      "required": true,
+      "carry": "tuple(int32 scalar step, float32[1024,256])",
+      "iterations": 64,
+      "body": "step + 1, value * 1.0009765625 + 0.03125",
+      "dtype": "float32",
+      "seed": 20261029
+    }
+  ]
+}

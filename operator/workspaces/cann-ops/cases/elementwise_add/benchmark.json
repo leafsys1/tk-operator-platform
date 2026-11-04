@@ -1,0 +1,52 @@
+{
+  "schema": "opx-benchmark/1",
+  "op": "elementwise_add",
+  "dtype": "float32",
+  "baseline": {
+    "impl": "torch.add (torch_npu, device 0)",
+    "app": "tools/torch_add_baseline.py",
+    "note": "官方对应实现；M1-0 穿刺确认镜像里 torch 2.10.0 + torch_npu 2.10.0.post4 可用"
+  },
+  "memory": {
+    "reads_per_elem": 2,
+    "writes_per_elem": 1,
+    "note": "逐元素 add：读 A、B，写 C（每元素 2 读 1 写）"
+  },
+  "compute": {
+    "flops_per_elem": 1,
+    "note": "add 每元素 1 flop；Roofline AI = 1 / (3 × dtype_bytes)"
+  },
+  "measure": {
+    "scope": "device_kernel_task_duration",
+    "note": "主值 = msopprof 设备侧 Task Duration：两侧跑同一个采集工具（候选跑可执行文件里的那一次 kernel，基线跑 tools/torch_add_baseline.py 里的 torch.add）。同源可比，不含各自框架的 host 派发开销 —— 用 host 墙钟做对比只会把框架开销差异当成算子差异。",
+    "tool": "msopprof",
+    "invocations": 5,
+    "retries_per_invocation": 3,
+    "warm_up": 2,
+    "aic_metrics": "Default",
+    "aggregate": "median"
+  },
+  "primary_case": "bench_1m",
+  "cases": [
+    {
+      "case_id": "bench_1m",
+      "required": true,
+      "n": 1048576,
+      "dtype": "float32",
+      "gen_a": {"dist": "uniform", "low": -1.0, "high": 1.0},
+      "gen_b": {"dist": "uniform", "low": -1.0, "high": 1.0},
+      "seed": 20261040,
+      "note": "N 上界（1M 元素，读写各 4/4/4 MB）：带宽受限主场景"
+    },
+    {
+      "case_id": "bench_64k",
+      "required": false,
+      "n": 65536,
+      "dtype": "float32",
+      "gen_a": {"dist": "normal", "mean": 0.0, "std": 1.0},
+      "gen_b": {"dist": "normal", "mean": 0.0, "std": 1.0},
+      "seed": 20261041,
+      "note": "中等尺寸：看小规模下启动开销占比"
+    }
+  ]
+}

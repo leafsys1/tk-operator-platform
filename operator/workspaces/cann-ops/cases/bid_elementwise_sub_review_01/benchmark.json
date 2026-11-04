@@ -1,0 +1,68 @@
+{
+  "schema": "opx-benchmark/1",
+  "op": "bid_elementwise_sub_review_01",
+  "dtype": "float32",
+  "baseline": {
+    "impl": "torch.sub (torch_npu, device 0)",
+    "app": "tools/torch_sub_baseline.py",
+    "note": "规格要求基线=torch.sub；同卡同规模、同一次 msopprof 采集口径"
+  },
+  "memory": {
+    "reads_per_elem": 2,
+    "writes_per_elem": 1,
+    "note": "逐元素 sub：读 x1、x2，写 y（每元素 2 读 1 写）"
+  },
+  "compute": {
+    "flops_per_elem": 1,
+    "note": "sub 每元素 1 flop；Roofline AI = 1/(3×dtype_bytes)"
+  },
+  "measure": {
+    "scope": "device_kernel_task_duration",
+    "tool": "msopprof",
+    "warm_up": 2,
+    "invocations": 5,
+    "retries_per_invocation": 3,
+    "aic_metrics": "Default",
+    "aggregate": "median",
+    "note": "主值=msopprof 设备侧 Task Duration 中位数（微秒）；invocations=5 为 5 次设备采样，retries_per_invocation=3 为每次采样最多尝试 3 次（含首次）"
+  },
+  "primary_case": "bench_64k",
+  "cases": [
+    {
+      "case_id": "bench_64k",
+      "required": true,
+      "n": 65536,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261120,
+      "note": "主用例 N=65536（64K，读 256+256KB 写 256KB）"
+    },
+    {
+      "case_id": "bench_1m",
+      "required": true,
+      "n": 1048576,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261121,
+      "note": "上界规模 N=1048576（1M，读 4+4MB 写 4MB）"
+    }
+  ]
+}

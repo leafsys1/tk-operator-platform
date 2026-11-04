@@ -1,0 +1,39 @@
+{
+  "schema": "opx-benchmark/1",
+  "op": "jax_lax_cond",
+  "runtime": {
+    "python": "3.11",
+    "jax": "0.8.1",
+    "backend": "xla-npu/AFIR"
+  },
+  "measure": {
+    "scope": "blocking_jit_execution",
+    "warm_up": 3,
+    "invocations": 10,
+    "aggregate": "median",
+    "synchronize": "block_until_ready",
+    "threshold": null,
+    "purpose": "baseline_only"
+  },
+  "primary_case": "cond_large_tensor_throughput",
+  "cases": [
+    {
+      "case_id": "cond_small_branch_overhead",
+      "required": true,
+      "pred": "dynamic_scalar_bool",
+      "operand": "float32[16]",
+      "branches": ["x + 1", "x - 1"],
+      "dtype": "float32",
+      "seed": 20261027
+    },
+    {
+      "case_id": "cond_large_tensor_throughput",
+      "required": true,
+      "pred": "dynamic_scalar_bool",
+      "operand": "float32[1024,256]",
+      "branches": ["x * 1.125 + 0.5", "x * 0.875 - 0.5"],
+      "dtype": "float32",
+      "seed": 20261027
+    }
+  ]
+}

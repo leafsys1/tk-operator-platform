@@ -1,0 +1,78 @@
+{
+  "schema": "opx-cases/1",
+  "op": "jax_lax_cond",
+  "spec_version": 1,
+  "criteria_ref": "ops-precision-standard@1",
+  "note": "节点 1 按 0-黑盒测试设计 §5.2/§5.4 物化的补充 L1 用例（S1–S5）；只写 tests/，不参与 suite_ref，不修改 cases/jax_lax_cond/。",
+  "cases": [
+    {
+      "case_id": "cond_sup_weak_type",
+      "group": "补充·弱类型",
+      "required": true,
+      "family": "jax",
+      "variants": ["weak", "strong"],
+      "operand": "float32[]",
+      "branches": ["x+1", "x-1"],
+      "pred": true,
+      "dtype": "float32",
+      "seed": 20261027,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "0-d weak/strong；输出 weak_type 必须与 CPU golden 逐叶精确；numpy family 记 n/a 不算覆盖"
+    },
+    {
+      "case_id": "cond_sup_pred_scalar_array",
+      "group": "补充·谓词形态",
+      "required": true,
+      "operand": "float32[6,4]",
+      "branches": ["x+1", "x-1"],
+      "pred": "scalar_bool_array",
+      "dtype": "float32",
+      "seed": 20261027,
+      "mode": ["eager_true", "eager_false", "jit_true", "jit_false"],
+      "expected": "match_cpu",
+      "note": "pred 为 0-d np.bool_/jnp.bool_，不是 Python bool；EXEC 的 pred_kind 冻结为 scalar_bool_array"
+    },
+    {
+      "case_id": "cond_sup_input_pytree_list",
+      "group": "补充·list pytree",
+      "required": true,
+      "operand": "[float32[3,5], float32[4]]",
+      "branches": ["list_inc", "list_dec"],
+      "pred": "scalar_bool",
+      "dtype": "float32",
+      "seed": 20261027,
+      "mode": ["eager_true", "eager_false", "jit_true", "jit_false"],
+      "expected": "match_cpu",
+      "note": "输入 list pytree；输出 out/0、out/1 逐叶独立判定，list 结构精确"
+    },
+    {
+      "case_id": "cond_sup_grad_traces_both",
+      "group": "补充·AD 分支证据",
+      "required": true,
+      "operand": "float32[5,4]",
+      "branches": ["grad_true", "grad_false"],
+      "pred": true,
+      "differentiate": "operand_only",
+      "dtype": "float32",
+      "seed": 20261027,
+      "mode": ["grad_eager", "grad_jit"],
+      "expected": "match_cpu",
+      "note": "grad 下两分支 trace_hits>=1；解析值 2.0 仅作诊断，不作通过依据"
+    },
+    {
+      "case_id": "cond_sup_nonfinite",
+      "group": "补充·特殊值",
+      "required": true,
+      "operand": "float32[8]",
+      "special_values": ["nan", "+inf", "-inf", "-0.0", "0.0", "1.0", "-1.0", "3.4028235e38"],
+      "branches": ["x+1", "x-1"],
+      "pred": "scalar_bool",
+      "dtype": "float32",
+      "seed": 20261027,
+      "mode": ["eager_true", "eager_false", "jit_true", "jit_false"],
+      "expected": "match_cpu",
+      "note": "NaN/±Inf 逐元素精确；有限子集走 ops-precision-standard@1；-0.0 符号不单独断言"
+    }
+  ]
+}

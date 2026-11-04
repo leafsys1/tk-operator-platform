@@ -1,8 +1,14 @@
 import re
 import unittest
+import sys
 from pathlib import Path
 
-HTML = Path(__file__).with_name('portal.html').read_text()
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from _paths import text as _asset_text  # noqa: E402
+
+HTML = _asset_text('portal.html')
 
 
 class ThemeContractTest(unittest.TestCase):

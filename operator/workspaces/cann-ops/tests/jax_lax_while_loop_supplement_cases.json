@@ -1,0 +1,60 @@
+{
+  "schema": "opx-cases/1",
+  "op": "jax_lax_while_loop",
+  "spec_version": 1,
+  "criteria_ref": "ops-precision-standard@1",
+  "runtime": {
+    "python": "3.11",
+    "jax": "0.8.1",
+    "backend": "xla-npu/AFIR",
+    "oracle": "同版本 JAX CPU"
+  },
+  "note": "补充 L1 用例（S1-S3），只补黑盒设计 §3.1 声明的真实覆盖缺口；不参与 suite_ref，不修改 cases/。",
+  "cases": [
+    {
+      "case_id": "while_sup_weak_type",
+      "group": "补充·弱类型",
+      "required": true,
+      "family": "jax",
+      "variants": ["weak", "strong"],
+      "carry": "float32 scalar (0-d)",
+      "cond": "c < 3",
+      "body": "c + 1.0",
+      "dtype": "float32",
+      "seed": 20261029,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "0-d weak/strong；输出 weak_type 必须与 CPU 逐叶精确"
+    },
+    {
+      "case_id": "while_sup_nonfinite",
+      "group": "补充·特殊值",
+      "required": true,
+      "carry": "tuple(int32 step=0, float32[8])",
+      "special_values": ["nan", "+inf", "-inf", "-0.0", "0.0", "1.0", "-1.0", "3.4028235e38"],
+      "cond": "step < 2",
+      "body": "step + 1, v * 1.0",
+      "dtype": "float32",
+      "seed": 20261029,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "NaN/±Inf 逐元素精确；有限子集走 ops-precision-standard@1"
+    },
+    {
+      "case_id": "while_sup_tensor_carry_data_cond",
+      "group": "补充·裸张量 carry",
+      "required": true,
+      "carry_kind": "bare_tensor",
+      "cond_kind": "data_dependent",
+      "carry": "float32[4]",
+      "inputs": [4.0, 2.0, 1.0, 0.5],
+      "cond": "jnp.all(v > 0.125)",
+      "body": "v * 0.5",
+      "dtype": "float32",
+      "seed": 20261029,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu",
+      "note": "裸张量 carry；数据相关 cond；精确二进制值，2 次迭代"
+    }
+  ]
+}

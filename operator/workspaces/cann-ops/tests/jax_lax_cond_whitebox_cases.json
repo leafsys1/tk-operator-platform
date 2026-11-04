@@ -1,0 +1,88 @@
+{
+  "schema": "opx-cases/1",
+  "op": "jax_lax_cond",
+  "spec_version": 1,
+  "criteria_ref": "ops-precision-standard@1",
+  "note": "节点 3 白盒用例：按 3-白盒测试设计.md 的源码分支清单物化，只写 tests/，不参与 suite_ref；沿用冻结 cases/criteria/golden，不改算子。",
+  "cases": [
+    {
+      "case_id": "cond_wb_tile_exact_8192",
+      "group": "白盒·tile 边界",
+      "required": true,
+      "operand": "float32[8192]",
+      "branches": ["x*2", "x/2"],
+      "pred": "scalar_bool",
+      "dtype": "float32",
+      "seed": 20261027,
+      "mode": ["eager_true", "eager_false"],
+      "expected": "match_cpu",
+      "note": "kernel Process stride==1 的满 tile 分支：numel=8192=COND_TILE_ELEMS，tiles=1，remain==8192（>tile 不成立时仍取整块）；bytes=32768，%32=0；覆盖 COND_OP_MUL2/COND_OP_HALF"
+    },
+    {
+      "case_id": "cond_wb_tile_tail_8193",
+      "group": "白盒·tile 边界",
+      "required": true,
+      "operand": "float32[8193]",
+      "branches": ["x+1", "x-1"],
+      "pred": "scalar_bool",
+      "dtype": "float32",
+      "seed": 20261027,
+      "mode": ["eager_true", "eager_false"],
+      "expected": "match_cpu",
+      "note": "kernel 多 tile 尾块分支：numel=8193，tiles=2，t=1 时 remain=1<TILE（count=remain）；bytes=32772，%32=4；覆盖 COND_OP_ADD1/COND_OP_SUB1"
+    },
+    {
+      "case_id": "cond_wb_multicore_grid_stride",
+      "group": "白盒·多核划分",
+      "required": true,
+      "operand": "float32[1024,512]",
+      "branches": ["x+1", "x-1"],
+      "pred": "scalar_bool",
+      "dtype": "float32",
+      "seed": 20261027,
+      "mode": ["eager_true", "eager_false"],
+      "expected": "match_cpu",
+      "note": "tiles=524288/8192=64；host blockNum=min(64,VECTOR_CORE_NUM)，kernel t+=blockNum 的 grid-stride 多轮分支（tiles>cores 时单核处理多 tile）；bytes=2097152，%32=0"
+    },
+    {
+      "case_id": "cond_wb_strided_src_full_tile",
+      "group": "白盒·跨步叶子边界",
+      "required": true,
+      "operand": "float32[64,128]",
+      "branches": ["out_tree", "out_tree"],
+      "pred": "scalar_bool",
+      "dtype": "float32",
+      "seed": 20261027,
+      "mode": ["eager_true", "eager_false"],
+      "expected": "match_cpu",
+      "note": "branch 7/8 out_tree：主输出 8192 连续 + aux 64 跨步（stride=128）；源 numel==8192 命中 host 的 stride>1 && in_numel<=COND_TILE_ELEMS 边界（8193 才拒绝）；aux bytes=256，%32=0"
+    },
+    {
+      "case_id": "cond_wb_jax_pytree_dict",
+      "group": "白盒·jax family pytree",
+      "required": true,
+      "family": "jax",
+      "operand": "dict(a:float32[3,5], b:float32[4])",
+      "branches": ["tree_add", "tree_sub"],
+      "pred": "scalar_bool",
+      "dtype": "float32",
+      "seed": 20261027,
+      "mode": ["eager_true", "eager_false"],
+      "expected": "match_cpu",
+      "note": "jax family 的 direct_branch：operand 是 concrete jax.Array dict（非 tracer），不走 grad 分支；覆盖 _execute_trace 的多叶 pytree 输出、_flatten/_structure_signature 与 weak_type 逐叶精确；abi_calls=0、backend=npu"
+    },
+    {
+      "case_id": "cond_wb_max_leaves_8",
+      "group": "白盒·叶子数上界",
+      "required": true,
+      "operand": "dict(a:float32[2,3], b:float32[4], c:float32[5], d:float32[6], e:float32[7], f:float32[8], g:float32[9], h:float32[10])",
+      "branches": ["tree_add", "tree_sub"],
+      "pred": "scalar_bool",
+      "dtype": "float32",
+      "seed": 20261027,
+      "mode": ["eager_true", "eager_false"],
+      "expected": "match_cpu",
+      "note": "MAX_LEAVES=8 上边界：n_inputs=n_outputs=8，覆盖 _build_output_plan 逐叶循环、host ABI 8 槽与 kernel Init 的 i<COND_MAX_LEAVES 分支；总 55 elements"
+    }
+  ]
+}

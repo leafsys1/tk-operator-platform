@@ -5,7 +5,12 @@ import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import gateway
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import gateway  # noqa: E402
 
 
 class Upstream(BaseHTTPRequestHandler):

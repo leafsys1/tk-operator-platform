@@ -1,0 +1,473 @@
+{
+  "schema": "opx-cases/1",
+  "op": "bid_elementwise_sub_20261101",
+  "spec_version": 2,
+  "dtype": "float32",
+  "criteria_ref": "ops-precision-standard@1",
+  "constraints": {
+    "n_min": 1,
+    "n_max": 1048576,
+    "same_shape": true,
+    "broadcasting": false,
+    "shape_model": "用例执行器以元素数 n_a / n_b 表达形状（一维）；算子按元素数逐元素计算，不感知维数",
+    "supported_dtypes": [
+      "float32"
+    ],
+    "supported_layouts": [
+      "连续内存"
+    ],
+    "empty_tensor_behavior": "拒绝 REJECT_N_OUT_OF_RANGE（exit 4），不返回空结果",
+    "shape_mismatch_behavior": "拒绝 REJECT_SHAPE_MISMATCH（exit 3），不广播",
+    "n_out_of_range_behavior": "拒绝 REJECT_N_OUT_OF_RANGE（exit 4）",
+    "unsupported_dtype_behavior": "拒绝 REJECT_UNSUPPORTED_DTYPE（exit 5）",
+    "bad_args_behavior": "拒绝 REJECT_BAD_ARGS（exit 2）",
+    "nonfinite_behavior": "NaN/Inf 逐元素精确透传",
+    "oracle": "torch CPU 的 a-b（一一对应）"
+  },
+  "case_groups": [
+    "常规",
+    "边界",
+    "数值边界",
+    "异常"
+  ],
+  "cases": [
+    {
+      "case_id": "sub_norm_001",
+      "group": "常规",
+      "required": true,
+      "n_a": 1,
+      "n_b": 1,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261101,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "最小合法 N=1（4B，非 32B 对齐）"
+    },
+    {
+      "case_id": "sub_norm_002",
+      "group": "常规",
+      "required": true,
+      "n_a": 17,
+      "n_b": 17,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261102,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "小 N=17（68B，非 32B 对齐）"
+    },
+    {
+      "case_id": "sub_norm_003",
+      "group": "常规",
+      "required": true,
+      "n_a": 1024,
+      "n_b": 1024,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261103,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "常规规模 N=1024（4096B，32B 对齐）"
+    },
+    {
+      "case_id": "sub_norm_004",
+      "group": "常规",
+      "required": true,
+      "n_a": 65535,
+      "n_b": 65535,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261104,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "非对齐尾块 N=65535（262140B，262140%32=28）"
+    },
+    {
+      "case_id": "sub_norm_005",
+      "group": "常规",
+      "required": true,
+      "n_a": 1048576,
+      "n_b": 1048576,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261105,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "上限 N=1048576（4MB/张量，N_MAX 边界合法值）"
+    },
+    {
+      "case_id": "sub_bnd_001",
+      "group": "边界",
+      "required": true,
+      "n_a": 8192,
+      "n_b": 8192,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261106,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "块长边界 N=8192（正好 1 个 8192 元素块）"
+    },
+    {
+      "case_id": "sub_bnd_002",
+      "group": "边界",
+      "required": true,
+      "n_a": 8193,
+      "n_b": 8193,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261107,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "块长边界 N=8193（1 整块 + 1 元素，跨块）"
+    },
+    {
+      "case_id": "sub_bnd_003",
+      "group": "边界",
+      "required": true,
+      "n_a": 1048575,
+      "n_b": 1048575,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261108,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "上限-1 N=1048575，与 sub_norm_005 共同夹住 N_MAX"
+    },
+    {
+      "case_id": "sub_num_001",
+      "group": "数值边界",
+      "required": true,
+      "n_a": 17,
+      "n_b": 17,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "special",
+        "leading": [
+          "nan",
+          "inf",
+          "-inf"
+        ]
+      },
+      "gen_b": {
+        "dist": "special",
+        "leading": [
+          "nan",
+          "inf",
+          "-inf"
+        ]
+      },
+      "seed": 20261109,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "NaN/Inf 双侧：a、b 头部均为 nan/inf/-inf，尾部 normal；逐元素精确比对"
+    },
+    {
+      "case_id": "sub_num_002",
+      "group": "数值边界",
+      "required": true,
+      "n_a": 17,
+      "n_b": 17,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "special",
+        "leading": [
+          "nan",
+          "inf",
+          "-inf"
+        ]
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261110,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "NaN/Inf 仅 a"
+    },
+    {
+      "case_id": "sub_num_003",
+      "group": "数值边界",
+      "required": true,
+      "n_a": 17,
+      "n_b": 17,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "special",
+        "leading": [
+          "nan",
+          "inf",
+          "-inf"
+        ]
+      },
+      "seed": 20261111,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "NaN/Inf 仅 b"
+    },
+    {
+      "case_id": "sub_num_004",
+      "group": "数值边界",
+      "required": true,
+      "n_a": 17,
+      "n_b": 17,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "zeros"
+      },
+      "gen_b": {
+        "dist": "zeros"
+      },
+      "seed": 20261112,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "双零：y = 0 - 0 = 0"
+    },
+    {
+      "case_id": "sub_num_005",
+      "group": "数值边界",
+      "required": true,
+      "n_a": 1024,
+      "n_b": 1024,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "zeros"
+      },
+      "seed": 20261113,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "右零：y = a - 0 = a"
+    },
+    {
+      "case_id": "sub_num_006",
+      "group": "数值边界",
+      "required": true,
+      "n_a": 1024,
+      "n_b": 1024,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "zeros"
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261114,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "左零：y = 0 - b = -b"
+    },
+    {
+      "case_id": "sub_num_007",
+      "group": "数值边界",
+      "required": true,
+      "n_a": 1024,
+      "n_b": 1024,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": 3.3e+38,
+        "high": 3.4e+38
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -3.4e+38,
+        "high": -3.3e+38
+      },
+      "seed": 20261115,
+      "expected": "match",
+      "expect_reject_code": null,
+      "note": "上溢出：a∈[3.3e38,3.4e38]、b∈[-3.4e38,-3.3e38]，a-b 溢出为 +inf；IEEE 语义与 torch CPU 一致"
+    },
+    {
+      "case_id": "sub_rej_001",
+      "group": "异常",
+      "required": true,
+      "n_a": 1024,
+      "n_b": 1024,
+      "dtype": "float16",
+      "gen_a": null,
+      "gen_b": null,
+      "seed": 0,
+      "expected": "reject",
+      "expect_reject_code": "REJECT_UNSUPPORTED_DTYPE",
+      "note": "非 float32：float16 → exit 5"
+    },
+    {
+      "case_id": "sub_rej_002",
+      "group": "异常",
+      "required": true,
+      "n_a": 1024,
+      "n_b": 1024,
+      "dtype": "int32",
+      "gen_a": null,
+      "gen_b": null,
+      "seed": 0,
+      "expected": "reject",
+      "expect_reject_code": "REJECT_UNSUPPORTED_DTYPE",
+      "note": "非 float32：int32 → exit 5"
+    },
+    {
+      "case_id": "sub_rej_003",
+      "group": "异常",
+      "required": true,
+      "n_a": 1024,
+      "n_b": 1,
+      "dtype": "float32",
+      "gen_a": null,
+      "gen_b": null,
+      "seed": 0,
+      "expected": "reject",
+      "expect_reject_code": "REJECT_SHAPE_MISMATCH",
+      "note": "需要广播的 shape（b 为 size-1 标量）：本版不广播 → 拒绝，exit 3；同时证明不做隐式广播"
+    },
+    {
+      "case_id": "sub_rej_004",
+      "group": "异常",
+      "required": true,
+      "n_a": 1024,
+      "n_b": 1023,
+      "dtype": "float32",
+      "gen_a": null,
+      "gen_b": null,
+      "seed": 0,
+      "expected": "reject",
+      "expect_reject_code": "REJECT_SHAPE_MISMATCH",
+      "note": "同 rank 但元素数不等（1024 vs 1023）→ 拒绝，exit 3"
+    },
+    {
+      "case_id": "sub_rej_005",
+      "group": "异常",
+      "required": true,
+      "n_a": 0,
+      "n_b": 0,
+      "dtype": "float32",
+      "gen_a": null,
+      "gen_b": null,
+      "seed": 20261107,
+      "expected": "reject",
+      "expect_reject_code": "REJECT_N_OUT_OF_RANGE",
+      "note": "空张量 N=0：本版不在支持范围 → 拒绝，exit 4（冒烟 run #24 实测行为）"
+    },
+    {
+      "case_id": "sub_rej_006",
+      "group": "异常",
+      "required": true,
+      "n_a": 1048577,
+      "n_b": 1048577,
+      "dtype": "float32",
+      "gen_a": null,
+      "gen_b": null,
+      "seed": 0,
+      "expected": "reject",
+      "expect_reject_code": "REJECT_N_OUT_OF_RANGE",
+      "note": "上限+1 N=1048577 → 拒绝，exit 4"
+    },
+    {
+      "case_id": "sub_rej_007",
+      "group": "异常",
+      "required": true,
+      "n_a": 2097152,
+      "n_b": 2097152,
+      "dtype": "float32",
+      "gen_a": null,
+      "gen_b": null,
+      "seed": 0,
+      "expected": "reject",
+      "expect_reject_code": "REJECT_N_OUT_OF_RANGE",
+      "note": "远超上限 N=2097152（8MB/张量）→ 拒绝，exit 4"
+    }
+  ],
+  "notes": [
+    "精度用例按规格 v2 生成（以现有 v3.0 实现实际能力为准）：判据 ops-precision-standard@1；oracle = torch CPU a-b。",
+    "v2 相对 v1.0 收窄：撤销完整 numpy 广播、撤销空张量透传、恢复 N∈[1,1048576] 上限，拒绝码回到 REJECT_* 口径；原 v1 的 sub_bnd_001（1024 vs 1 广播）、sub_bnd_002（n=0 空张量）、sub_bnd_003（2097152 超上限）已改为 expected=reject（sub_rej_003 / sub_rej_005 / sub_rej_007）。",
+    "依据：冒烟 run #24 实测 sub_bnd_002 n=0 → 用例级 rc=4 / REJECT_N_OUT_OF_RANGE（run 级 rc=1 即 SMOKE_VERDICT FAIL）。",
+    "执行器限制：tools/run_cases.py 的 elementwise 分支只读 n_a / n_b 并要求 match 用例输出 shape == (n_a,)，因此拒绝用例覆盖 shape 不一致与 N 越界，但不覆盖拒绝信息文本以外的 ABI 细节。"
+  ]
+}

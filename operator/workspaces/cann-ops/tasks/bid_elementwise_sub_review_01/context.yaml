@@ -1,0 +1,21 @@
+# 上下文装载契约（方案 v1.1 §8）。键名固定，供后端每轮拼 prompt 用。
+always_load:
+  - TASK.md
+  - spec/spec.json              # 语义 / 输入输出 / 正确性三段
+by_stage:
+  design: [ops-design-paradigms, ascendc-tiling-design]
+  code: [repo-coding-rules]
+  verify: [ops-precision-standard]
+  perf: [ops-profiling, ascendc-performance-best-practices]
+by_action:
+  test: ["ops-precision-standard@1", cases/]
+  benchmark: [baseline, cases/]
+  profile: [criteria]
+never_default:
+  - 全量会话历史
+  - 全部 40 个 skills
+  - 原始大产物（日志 / bin / jsonl）
+pointers:
+  cases: ../../cases/        # 相对工作区
+  criteria: ../../criteria/
+  ops: ../../ops/

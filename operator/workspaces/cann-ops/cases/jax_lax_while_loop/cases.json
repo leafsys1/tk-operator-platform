@@ -1,0 +1,184 @@
+{
+  "schema": "opx-cases/1",
+  "op": "jax_lax_while_loop",
+  "spec_version": 1,
+  "criteria_ref": "ops-precision-standard@1",
+  "runtime": {
+    "python": "3.11",
+    "jax": "0.8.1",
+    "backend": "xla-npu/AFIR",
+    "oracle": "同版本 JAX CPU"
+  },
+  "evidence_policy": {
+    "mode_separation": true,
+    "xfail_or_unsupported_is_pass": false,
+    "iteration_hit_requires_raw_evidence": true,
+    "error_normalization_keeps_upstream_summary": true
+  },
+  "case_groups": ["动态迭代", "carry pytree", "jit", "自动微分", "边界与规模", "执行证据", "错误分类"],
+  "cases": [
+    {
+      "case_id": "while_zero_iterations",
+      "group": "动态迭代",
+      "required": true,
+      "carry": "tuple(int32 scalar step=0, float32[8])",
+      "condition": "step < 0",
+      "body": "step + 1, value + 1",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu_and_body_hits_0"
+    },
+    {
+      "case_id": "while_one_iteration",
+      "group": "动态迭代",
+      "required": true,
+      "carry": "tuple(int32 scalar step=0, float32[8])",
+      "condition": "step < 1",
+      "body": "step + 1, value * 1.25 + 0.5",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu_and_body_hits_1"
+    },
+    {
+      "case_id": "while_dynamic_multi_iterations",
+      "group": "动态迭代",
+      "required": true,
+      "carry": "tuple(int32 scalar step=0, int32 scalar limit, float32[4,17])",
+      "condition": "step < limit",
+      "limits": [2, 7, 13],
+      "body": "step + 1, limit, value * 1.03125 + 0.125",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu_and_exact_iteration_count"
+    },
+    {
+      "case_id": "while_scalar_carry",
+      "group": "动态迭代",
+      "required": true,
+      "carry": "int32 scalar",
+      "condition": "carry < 9",
+      "body": "carry + 2",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "while_tuple_carry",
+      "group": "carry pytree",
+      "required": true,
+      "carry": "tuple(int32 scalar step, float32[6,4], float32[6,2])",
+      "condition": "step < 5",
+      "body": "step + 1, a + b.mean, b * 0.875",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu_and_tree_metadata_exact"
+    },
+    {
+      "case_id": "while_nested_dict_carry",
+      "group": "carry pytree",
+      "required": true,
+      "carry": "dict(step:int32 scalar, state:tuple(float32[5,3], dict(aux:float32[5])))",
+      "condition": "step < 4",
+      "body": "structure_preserving_update",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu_and_tree_shape_dtype_weak_type_exact"
+    },
+    {
+      "case_id": "while_jit_runtime_limit",
+      "group": "jit",
+      "required": true,
+      "carry": "tuple(int32 scalar step, int32 scalar runtime_limit, float32[4,33])",
+      "condition": "step < runtime_limit",
+      "runtime_limits": [0, 1, 8],
+      "mode": ["jit"],
+      "evidence": "same compiled plan accepts multiple runtime limits",
+      "expected": "match_cpu_and_plan_id_stable"
+    },
+    {
+      "case_id": "while_jvp_multi_iteration",
+      "group": "自动微分",
+      "required": true,
+      "carry": "tuple(int32 scalar step, float32[5,4] primal)",
+      "tangent": "tuple(float0 step, float32[5,4])",
+      "condition": "step < 6",
+      "body": "step + 1, primal * 1.125 + 0.25",
+      "mode": ["jvp_eager", "jvp_jit"],
+      "expected": "primal_and_tangent_match_cpu"
+    },
+    {
+      "case_id": "while_jvp_zero_iteration",
+      "group": "自动微分",
+      "required": true,
+      "carry": "tuple(int32 scalar step=0, float32[5,4] primal)",
+      "tangent": "tuple(float0 step, float32[5,4])",
+      "condition": "step < 0",
+      "mode": ["jvp_eager", "jvp_jit"],
+      "expected": "identity_primal_and_tangent_match_cpu"
+    },
+    {
+      "case_id": "while_unaligned_tail_widths",
+      "group": "边界与规模",
+      "required": true,
+      "dtype": "float32",
+      "elements": [17, 33],
+      "bytes": [68, 132],
+      "bytes_mod_32": [4, 4],
+      "iterations": 5,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "while_large_tensor",
+      "group": "边界与规模",
+      "required": true,
+      "carry": "tuple(int32 scalar step, float32[1024,256])",
+      "condition": "step < 12",
+      "body": "step + 1, value * 1.0009765625 + 0.03125",
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "while_iteration_token_and_hits",
+      "group": "执行证据",
+      "required": true,
+      "carry": "tuple(int32 scalar step, int32 scalar runtime_limit, float32[16])",
+      "runtime_limits": [0, 1, 7],
+      "mode": ["eager", "jit"],
+      "evidence": "raw backend token plus condition/body ABI counters separated by mode",
+      "expected": "device_route_and_exact_cond_body_hits"
+    },
+    {
+      "case_id": "while_invalid_condition",
+      "group": "错误分类",
+      "required": true,
+      "condition_outputs": ["bool[1]", "bool[2]", "int32 scalar", "float32 scalar"],
+      "mode": ["eager", "jit"],
+      "expected_error": "INVALID_CONDITION"
+    },
+    {
+      "case_id": "while_carry_structure_mismatch",
+      "group": "错误分类",
+      "required": true,
+      "input_carry": "tuple(float32[4], float32[4])",
+      "body_output": "dict(a:float32[4], b:float32[4])",
+      "mode": ["eager", "jit"],
+      "expected_error": "CARRY_STRUCTURE_MISMATCH"
+    },
+    {
+      "case_id": "while_carry_shape_or_dtype_mismatch",
+      "group": "错误分类",
+      "required": true,
+      "variants": [
+        {"input": "float32[4]", "body_output": "float32[5]", "expected_error": "CARRY_SHAPE_MISMATCH"},
+        {"input": "float32[4]", "body_output": "int32[4]", "expected_error": "CARRY_DTYPE_MISMATCH"}
+      ],
+      "mode": ["eager", "jit"],
+      "expected": "stable_normalized_error_with_upstream_summary"
+    },
+    {
+      "case_id": "while_iteration_limit_exceeded",
+      "group": "错误分类",
+      "required": true,
+      "carry": "tuple(int32 scalar step, float32[8])",
+      "condition": "always_true",
+      "safety_iteration_limit": 64,
+      "mode": ["eager", "jit"],
+      "expected_error": "ITERATION_LIMIT_EXCEEDED"
+    }
+  ]
+}

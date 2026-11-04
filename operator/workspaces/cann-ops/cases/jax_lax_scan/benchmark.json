@@ -1,0 +1,36 @@
+{
+  "schema": "opx-benchmark/1",
+  "op": "jax_lax_scan",
+  "runtime": {
+    "python": "3.11",
+    "jax": "0.8.1",
+    "backend": "xla-npu/AFIR"
+  },
+  "measure": {
+    "scope": "blocking_jit_execution",
+    "warm_up": 3,
+    "invocations": 10,
+    "aggregate": "median",
+    "synchronize": "block_until_ready",
+    "note": "只记录同镜像同设备下 NPU 稳态数据，不与 CPU 延迟混做性能门槛"
+  },
+  "primary_case": "scan_len1024_width256_f32",
+  "cases": [
+    {
+      "case_id": "scan_len128_width256_f32",
+      "required": true,
+      "length": 128,
+      "width": 256,
+      "dtype": "float32",
+      "seed": 20261026
+    },
+    {
+      "case_id": "scan_len1024_width256_f32",
+      "required": true,
+      "length": 1024,
+      "width": 256,
+      "dtype": "float32",
+      "seed": 20261026
+    }
+  ]
+}

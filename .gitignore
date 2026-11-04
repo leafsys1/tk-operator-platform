@@ -27,11 +27,16 @@ node_modules/
 npm-debug.log*
 
 # ---- 运行数据：过程证据不进库，另有台账 ----
-runs/
-archives/
-reports/
-case-library/
-workspaces/
+# 用前导 / 锚定根目录，避免误伤 operator/workspaces（那是必须入库的算子工作区模板）
+/runs/
+/archives/
+/reports/
+/case-library/
+/workspaces/
+operator/workspaces/cann-ops/.dsh/
+operator/workspaces/cann-ops/.opx-chat/
+operator/workspaces/cann-ops/.cannbot/
+operator/workspaces/*/build/
 *.db
 *.db-wal
 *.db-shm

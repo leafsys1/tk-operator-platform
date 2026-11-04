@@ -1,0 +1,41 @@
+{
+  "schema": "opx-benchmark/1",
+  "op": "jax_lax_associative_scan",
+  "runtime": {
+    "python": "3.11",
+    "jax": "0.8.1",
+    "backend": "xla-npu/AFIR"
+  },
+  "measure": {
+    "scope": "blocking_jit_execution",
+    "warm_up": 3,
+    "invocations": 10,
+    "aggregate": "median",
+    "synchronize": "block_until_ready"
+  },
+  "primary_case": "assoc_sum_len1024_width256",
+  "cases": [
+    {
+      "case_id": "assoc_sum_len256_width256",
+      "required": true,
+      "op_kind": "sum",
+      "length": 256,
+      "width": 256,
+      "axis": 0,
+      "reverse": false,
+      "dtype": "float32",
+      "seed": 20261026
+    },
+    {
+      "case_id": "assoc_sum_len1024_width256",
+      "required": true,
+      "op_kind": "sum",
+      "length": 1024,
+      "width": 256,
+      "axis": 0,
+      "reverse": false,
+      "dtype": "float32",
+      "seed": 20261026
+    }
+  ]
+}

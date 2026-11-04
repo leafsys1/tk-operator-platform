@@ -1,0 +1,68 @@
+{
+  "schema": "opx-benchmark/1",
+  "op": "elementwise_sub",
+  "dtype": "float32",
+  "baseline": {
+    "impl": "torch.sub (torch_npu, device 0, alpha=1)",
+    "app": "tools/torch_sub_baseline.py",
+    "note": "规格要求基线=torch.sub；同卡同规模、同一次 msopprof 采集口径"
+  },
+  "memory": {
+    "reads_per_elem": 2,
+    "writes_per_elem": 1,
+    "note": "逐元素 sub：读 a、b，写 y（每元素 2 读 1 写）"
+  },
+  "compute": {
+    "flops_per_elem": 1,
+    "note": "sub 每元素 1 flop；Roofline AI = 1/(3×dtype_bytes)"
+  },
+  "measure": {
+    "scope": "device_kernel_task_duration",
+    "note": "主值 = msopprof 设备侧 Task Duration；候选跑可执行文件那一次 kernel，基线跑 tools/torch_sub_baseline.py 里的 torch.sub",
+    "tool": "msopprof",
+    "invocations": 5,
+    "retries_per_invocation": 3,
+    "warm_up": 2,
+    "aic_metrics": "Default",
+    "aggregate": "median"
+  },
+  "primary_case": "bench_1m",
+  "cases": [
+    {
+      "case_id": "bench_1m",
+      "required": true,
+      "n": 1048576,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "gen_b": {
+        "dist": "uniform",
+        "low": -1.0,
+        "high": 1.0
+      },
+      "seed": 20261040,
+      "note": "上界规模（1M，读 4+4MB 写 4MB）：带宽受限主场景"
+    },
+    {
+      "case_id": "bench_64k",
+      "required": true,
+      "n": 65536,
+      "dtype": "float32",
+      "gen_a": {
+        "dist": "normal",
+        "mean": 0.0,
+        "std": 1.0
+      },
+      "gen_b": {
+        "dist": "normal",
+        "mean": 0.0,
+        "std": 1.0
+      },
+      "seed": 20261043,
+      "note": "小规模：启动/分块开销占比"
+    }
+  ]
+}

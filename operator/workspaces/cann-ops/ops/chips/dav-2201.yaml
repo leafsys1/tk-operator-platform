@@ -1,0 +1,109 @@
+# 目标硬件特性画像 —— Atlas A2 / Ascend 910B（DAV_2201）
+#
+# 方案 v1.1 §13-A11 的落地：让 agent「基于目标硬件特性生成优化代码」时有**事实输入**，
+# 而不是凭模型记忆猜 UB 容量 / 核数 / 对齐。内容源自技能 `npu-arch`（CANN ini + 公开资料）
+# 与最佳实践技能 `ascendc-performance-best-practices`；与历史实测参考（M1-b）交叉核对。
+#
+# 使用口径（重要）：
+#   - 本文件是**静态参考**，给 agent 读、给规格引；**算子代码不得硬编码**这些常量，
+#     运行时必须以 `PlatformAscendC`（`GetCoreMemSize` 等）/ `aclrtGetDeviceInfo` 返回为准。
+#   - 每个值带 `source` 与 `confidence`；`confidence: uncertain` 的不得当成定论。
+#   - 换芯片型号时**新建一个文件**（别改这个），规格的环境段按文件名引用。
+#
+# 证据来源：
+#   - 技能：`workspaces/cann-ops/.dsh/skills/npu-arch/references/npu-hardware-params.md`（§2.3 / §2 子型号）
+#   - 技能：`workspaces/cann-ops/.dsh/skills/ascendc-performance-best-practices/`（elementwise / common）
+#   - 历史实测参考：`docs/PROGRESS.md`「M1-b 实测记录」（Ascend910B1，device 0，profile 1850MHz / 48 逻辑核）
+
+schema: opx-chip-profile/1
+arch: DAV_2201
+npu_arch_flag: "dav-2201"          # 与 ops/<op>/CMakeLists.txt 的 --npu-arch 一致
+soc_versions: ["ASCEND910B", "ASCEND910_93"]
+product_family: "Atlas A2 训练/推理"
+models: ["Ascend910B1", "Ascend910B2", "Ascend910B3", "Ascend910B4", "Ascend910B2C", "Ascend910_93"]
+
+# ---- 运行时权威来源（写下来，免得又被硬编码回代码里）----
+runtime_authoritative:
+  - "PlatformAscendC::GetCoreMemSize(CoreMemType::UB|L1|L0C|BT, ...) 与 GetCoreNumAiv()/GetCoreNumAic()"
+  - "aclrtGetDeviceInfo(device, ACL_DEV_ATTR_VECTOR_CORE_NUM, ...)（host 侧选核用）"
+  - "aclrtGetDeviceInfo(device, ACL_DEV_ATTR_AICORE_CORE_NUM)" 
+
+# ---- 关键常量（DAV_2201 架构级；子型号间通常一致）----
+facts:
+  - {key: l1_size_bytes,      value: 524288,  source: "npu-arch §2.3 (ini l1_size)",     confidence: high}
+  - {key: l0c_size_bytes,     value: 131072,  source: "npu-arch §2.3 (ini l0_c_size)",   confidence: high}
+  - {key: ub_size_bytes,      value: 196608,  source: "npu-arch §2.3 (ini ub_size)",     confidence: high, note: "每 AIV 用户可用；GetCoreMemSize(UB) 同上"}
+  - {key: bt_size_bytes,      value: 1024,    source: "npu-arch §2.3 (ini bt_size)",     confidence: high}
+  - {key: l0a_size_bytes,     value: 65536,   source: "npu-arch §1 (服务器架构一致)",     confidence: high}
+  - {key: l0b_size_bytes,     value: 65536,   source: "npu-arch §1 (服务器架构一致)",     confidence: high}
+  - {key: cube_mac,           value: [16, 16, 16], source: "npu-arch §1 (cube_m/k/n_size)", confidence: high}
+  - {key: core_ratio,         value: "CubeCore:VectorCore = 1:2", source: "npu-arch §2.3", confidence: high}
+  - {key: sparsity_4_2,       value: true,    source: "npu-arch §2.3 (sparsity)",         confidence: high}
+
+# ---- 子型号变化参数（本机是 910B1；示例值来自 ini 的 910B2，仅作量级参考）----
+# ⚠️ 核数/频率/L2/HBM 随子型号变化，**不算架构常量**，只作优化时的量级判断。
+model_variable:
+  vector_core_count:
+    value: 48
+    source: "历史实测参考（M1-b：候选 tiling 推出 availableCoreNum=48；torch 用 48 blocks）"
+    confidence: high
+  cube_core_count:
+    value: 24
+    source: "npu-arch §2 子型号示例（Ascend910B2）；本机未单独实测"
+    confidence: medium
+  frequency_mhz:
+    value: 1850
+    source: "历史实测参考（msopprof OpBasicInfo Current/Rated Freq = 1850）"
+    confidence: high
+  l2_size_bytes:
+    value: 201326592
+    source: "npu-arch §2 子型号示例（Ascend910B2 = 192MB）；本机未核"
+    confidence: low
+  hbm_bandwidth_gbps:
+    value: 1600
+    source: "公开资料 + 历史实测参考反推（M1-b：候选达成 ~1542 GB/s，接近该量级）"
+    confidence: medium
+    note: "用于判断「是否搬运受限」；精确值以实测 profiling 为准，不写进代码"
+
+# ---- 算力上限（Roofline 用；由核数/频率/宽度反推，标 uncertain）----
+compute:
+  vector_fp32_peak_tflops:
+    value: 5.68
+    source: "[推断] 48 向量核 × 1850MHz × 64(fp32/repeat，= 256B/4B) = 5.68 T op/s；add 是 1 op/元素"
+    confidence: low
+    note: "仅用于 Roofline 的算力上限（同量级判断）；FMA 场景可到 2×。以实测为准"
+
+# ---- 对优化决策关键的对齐 / 宽度事实 ----
+alignment:
+  datacopy_min_align_bytes: 32     # DataCopy/DataCopyPad 的对齐粒度；非 32B 整数倍要走 Pad
+  source: "Ascend C 编程约定（DataCopyPad）；用例 add_edge_004 专门锁非对齐路径"
+  confidence: high
+vector_width:
+  fp32_elements_per_repeat: 64     # = 256B / 4B，Vector Unit 宽度
+  fp16_elements_per_repeat: 128
+  source: "ascendc-performance-best-practices/references/elementwise/vector_efficiency_design.md §3.1"
+  confidence: high
+
+# ---- 与本算子（elementwise_add）直接相关的优化杠杆（给 agent 指路，不是结论）----
+optimization_levers:
+  - id: tile_size_and_double_buffer
+    idea: "增大 TILE_LENGTH / 保证 double buffer 重叠，降低分块循环与 scalar 开销（默认 4096 元素 = 16KB/张量）"
+    skill: "elementwise/double_buffer_design.md"
+  - id: tile_size_ub_budget
+    idea: "UB 预算：3 个队列 × 2 buffer × TILE_LENGTH × 4B 必须 ≤ 196608B；4096→96KB，8192→192KB（顶满，需评估）"
+    skill: "elementwise/double_buffer_design.md"
+  - id: core_shrink_small_shape
+    idea: "小 shape 下核启动/同步开销占比高 → 按 min_rows_per_core 裁剪核数（本算子 64k 时固定开销明显）"
+    skill: "common/core_shrink_design.md"
+  - id: datacopy_alignment_and_tail
+    idea: "DataCopyPad 尾块与 32B 对齐；非对齐输入的分块策略"
+    skill: "common/datacopy_optimization_design.md"
+  - id: vector_efficiency_counter_mode
+    idea: "Scalar 计算 repeat/mask 占比高时用 Counter 模式减少控制指令（以 profiling 为准）"
+    skill: "elementwise/vector_efficiency_design.md"
+
+# ---- 不确定项（不得当定论）----
+uncertain:
+  - "本机是 910B1 还是 910B2：`npu-smi` 报 Ascend910B1，核数按实测 48 记；cube 核数未实测"
+  - "cache line / burst 的确切字节数未从 ini 逐字段核对（只确认了 32B DataCopy 对齐约定）"
+  - "HBM 峰值带宽为公开资料 + 实测反推，非 ini 真值"

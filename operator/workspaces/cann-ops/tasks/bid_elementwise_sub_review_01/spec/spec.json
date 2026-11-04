@@ -1,0 +1,91 @@
+{
+  "_meta": {
+    "generated_by": "op-agent",
+    "spec_version_id": 4,
+    "spec_version": 1,
+    "sha256": "52333ec51f49e2eb74491b936f7bc1c4ce81d750d0080eb77d37d2728a1d6655",
+    "created_at": "2026-11-02 03:57 UTC",
+    "unknowns": []
+  },
+  "op_name": "bid_elementwise_sub_review_01",
+  "math_def": "对 0≤i<N，y[i]=x1[i]-x2[i]；无广播、无 alpha、不原位修改，输出为新分配张量",
+  "params": "无额外参数（subtract(x1, x2)）",
+  "inputs": [
+    {
+      "name": "x1",
+      "dtype": "float32",
+      "shape": "一维 [N]",
+      "layout": "连续(contiguous)",
+      "device": "NPU",
+      "constraints": "1≤N≤1048576；支持连续且 storage_offset 非零的视图"
+    },
+    {
+      "name": "x2",
+      "dtype": "float32",
+      "shape": "一维 [N]，与 x1 同长度",
+      "layout": "连续(contiguous)",
+      "device": "与 x1 同一 NPU",
+      "constraints": "同上"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "y",
+      "dtype": "float32",
+      "shape": "与输入同形状（一维 [N]）",
+      "layout": "连续(contiguous)",
+      "device": "同设备（与输入一致）",
+      "note": "新分配"
+    }
+  ],
+  "layout": "连续一维",
+  "support": "同一 NPU 上、同长度一维连续 float32 向量；1≤N≤1048576；支持连续且 storage_offset≠0 的视图",
+  "unsupported": "广播、alpha、原位修改；非一维、非连续、跨 NPU、长度不同、空或超长（N 越界）、非 float32",
+  "special_behavior": {
+    "empty_input": "ValueError + REJECT_N_OUT_OF_RANGE",
+    "nan_inf": "NaN 按位置和类别核对、Inf 按符号核对；NaN payload 与零符号位不作逐位要求；有限值按 ops-precision-standard@1"
+  },
+  "api_contract": {
+    "signature": "subtract(x1, x2)",
+    "errors": [
+      "非 Tensor、CPU 输入或 CPU/NPU 混用 → TypeError + REJECT_BAD_ARGS",
+      "非一维、非连续或跨 NPU → ValueError + REJECT_BAD_ARGS",
+      "长度不同 → ValueError + REJECT_SHAPE_MISMATCH",
+      "空或超长 → ValueError + REJECT_N_OUT_OF_RANGE",
+      "非 float32 → ValueError + REJECT_UNSUPPORTED_DTYPE",
+      "底层执行失败 → RuntimeError",
+      "多重错误按实际入口检查顺序核对"
+    ]
+  },
+  "target_chip": "Ascend 910B1",
+  "target_hardware_profile": "ops/chips/dav-2201.yaml",
+  "target_env": "沿用平台默认镜像与 CANN",
+  "oracle": "CPU torch.sub（torch.sub(x1.cpu(), x2.cpu())），仅作数值对比",
+  "execution_constraint": "候选实现必须在目标 NPU 上执行；输出设备与输入一致；不允许 CPU/torch 代算回退",
+  "tolerance": "ops-precision-standard@1（有限值：rtol=2^-10、atol=2^-16、matched_ratio≥0.99、max_abs_err≤0.01）",
+  "consistency": "输出 shape/dtype 完全一致；NaN 按位置和类别核对、Inf 按符号核对；NaN payload 与零符号位不作逐位要求",
+  "performance_baseline": "同设备 torch.sub",
+  "performance_target": "不设固定加速比硬线；结论按实测如实记录",
+  "benchmark": {
+    "required": true,
+    "primary_n": 65536,
+    "secondary_n": 1048576,
+    "baseline": "同设备 torch.sub",
+    "warm_up": 2,
+    "invocations": 5,
+    "retries_per_invocation": 3,
+    "metric": "设备 Task Duration 中位数（μs）"
+  },
+  "delivery": [
+    "算子实现",
+    "Python 调用接口",
+    "pytest 测试脚本",
+    "独立示例",
+    "算子说明文档",
+    "测试报告"
+  ],
+  "assumptions": [
+    "跨 NPU 拒绝路径验证需两张可独占卡；若本次仅一张卡，该项记为未验证、不冒通过"
+  ],
+  "unknowns": []
+}

@@ -1,11 +1,17 @@
 import re
 import unittest
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from _paths import text as _asset_text  # noqa: E402
 
 import gateway
 
-HTML = Path(__file__).with_name('portal.html').read_text()
-GATEWAY = Path(__file__).with_name('gateway.py').read_text()
+HTML = _asset_text('portal.html')
+GATEWAY = _asset_text('gateway.py')
 
 
 class UnifiedWorkbenchContractTest(unittest.TestCase):

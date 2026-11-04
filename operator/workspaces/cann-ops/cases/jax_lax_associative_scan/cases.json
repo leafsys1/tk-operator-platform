@@ -1,0 +1,106 @@
+{
+  "schema": "opx-cases/1",
+  "op": "jax_lax_associative_scan",
+  "spec_version": 1,
+  "criteria_ref": "ops-precision-standard@1",
+  "runtime": {
+    "python": "3.11",
+    "jax": "0.8.1",
+    "backend": "xla-npu/AFIR",
+    "oracle": "同版本 JAX CPU"
+  },
+  "case_groups": ["常规", "反向扫描", "pytree", "axis", "边界", "自动微分"],
+  "cases": [
+    {
+      "case_id": "assoc_sum_len8_axis0",
+      "group": "常规",
+      "required": true,
+      "op_kind": "sum",
+      "shape": [8, 16],
+      "axis": 0,
+      "reverse": false,
+      "dtype": "float32",
+      "seed": 20261026,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "assoc_max_len7_axis0",
+      "group": "常规",
+      "required": true,
+      "op_kind": "max",
+      "shape": [7, 5],
+      "axis": 0,
+      "reverse": false,
+      "dtype": "float32",
+      "seed": 20261026,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "assoc_reverse_sum_len9",
+      "group": "反向扫描",
+      "required": true,
+      "op_kind": "sum",
+      "shape": [9, 4],
+      "axis": 0,
+      "reverse": true,
+      "dtype": "float32",
+      "seed": 20261026,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "assoc_pytree_add_len6",
+      "group": "pytree",
+      "required": true,
+      "op_kind": "pytree_add",
+      "elems": "dict(a:float32[6,4], b:float32[6,2])",
+      "axis": 0,
+      "reverse": false,
+      "dtype": "float32",
+      "seed": 20261026,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "assoc_sum_axis1",
+      "group": "axis",
+      "required": true,
+      "op_kind": "sum",
+      "shape": [3, 8, 4],
+      "axis": 1,
+      "reverse": false,
+      "dtype": "float32",
+      "seed": 20261026,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "assoc_sum_len1",
+      "group": "边界",
+      "required": true,
+      "op_kind": "sum",
+      "shape": [1, 16],
+      "axis": 0,
+      "reverse": false,
+      "dtype": "float32",
+      "seed": 20261026,
+      "mode": ["eager", "jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "assoc_grad_sum",
+      "group": "自动微分",
+      "required": true,
+      "op_kind": "sum",
+      "shape": [5, 4],
+      "axis": 0,
+      "reverse": false,
+      "dtype": "float32",
+      "seed": 20261026,
+      "mode": ["jvp", "vjp"],
+      "expected": "match_cpu_or_explicit_unsupported"
+    }
+  ]
+}

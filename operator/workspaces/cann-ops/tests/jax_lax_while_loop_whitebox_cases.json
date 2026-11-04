@@ -1,0 +1,4978 @@
+{
+  "schema": "opx-whitebox-cases/1",
+  "op": "jax_lax_while_loop",
+  "spec_version": 1,
+  "criteria_ref": "ops-precision-standard@1",
+  "origin": "节点 2 白盒测试设计（2-白盒测试设计.md）；分支 ID 与设计 §2 同一字典",
+  "suite_ref_note": "白盒用例只写 tests/，不进入 cases/，不参与 suite_ref=cases@288876910a5e2843；不改变冻结 16+2+3 的 21/61 身份与判据。",
+  "counts": {
+    "identities": 27,
+    "mode_executions": 59
+  },
+  "branch_registry": [
+    "P01",
+    "P02",
+    "P03",
+    "P04",
+    "P05",
+    "P06",
+    "P07",
+    "P08",
+    "P09",
+    "P10",
+    "P11",
+    "P12",
+    "P13",
+    "P14",
+    "P15",
+    "P16",
+    "P17",
+    "P18",
+    "P19",
+    "P20",
+    "P21",
+    "P22",
+    "P23",
+    "P24",
+    "P25",
+    "P26",
+    "P27",
+    "P28",
+    "P29",
+    "P30",
+    "P31",
+    "P32",
+    "P33",
+    "P34",
+    "P35",
+    "P36",
+    "P37",
+    "P38",
+    "P39",
+    "P40",
+    "P41",
+    "P42",
+    "P43",
+    "P44",
+    "P45",
+    "P46",
+    "P47",
+    "P48",
+    "P49",
+    "P50",
+    "P51",
+    "P52",
+    "P53",
+    "P54",
+    "K01",
+    "K02",
+    "K03",
+    "K04",
+    "K05",
+    "K06",
+    "K07",
+    "K08",
+    "K09",
+    "K10",
+    "K11",
+    "K12",
+    "K13",
+    "K14",
+    "K15",
+    "K16",
+    "K17",
+    "K18",
+    "K19",
+    "K20",
+    "K21",
+    "K22",
+    "K23",
+    "K24",
+    "K25",
+    "K26",
+    "K27",
+    "H01",
+    "H02",
+    "H03",
+    "H04",
+    "H05",
+    "H06",
+    "H07",
+    "H08",
+    "H09",
+    "H10",
+    "H11",
+    "H12",
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "C05"
+  ],
+  "branch_notes": {
+    "C01": {
+      "status": "hit",
+      "evidence": "黑盒共享 runner 16/51 次 CLI --mode choices。"
+    },
+    "C02": {
+      "status": "hit",
+      "evidence": "黑盒 c13-c16 五码拒绝 → rc=3 + REJECT/UPSTREAM。"
+    },
+    "C03": {
+      "status": "hit",
+      "evidence": "负向自检 cli_other_whileloop_error：真实 CLI main 注入非线性 body → UNSUPPORTED_PLAN（非五码）→ rc=1。"
+    },
+    "C04": {
+      "status": "hit",
+      "evidence": "负向自检 cli_unhandled_exception：真实 CLI main 内注入 RuntimeError（非 WhileLoopError）→ rc=1 + ERROR unhandled RuntimeError。"
+    },
+    "C05": {
+      "status": "hit",
+      "evidence": "黑盒 c01-c12/p01/p02/S1-S3 正常输出 EXEC 行。"
+    },
+    "H01": {
+      "status": "partial",
+      "evidence": "8 叶边界由 eight_leaves 命中；n>8 的 host 拒绝侧在 Python 接口下不可达（_fill_args 写 ctypes[8] 先抛 IndexError），负向自检 h01_nine_leaves_public_api 复现。"
+    },
+    "H02": {
+      "status": "unreachable",
+      "evidence": "Python L907 先以 invalid_argument 拒绝 safety_limit<1；host 侧为防御，公开接口不可达。"
+    },
+    "H06": {
+      "status": "unreachable",
+      "evidence": "_derive_plan 保证逐元素源 numel == 输出 numel；host 侧为防御。"
+    },
+    "H07": {
+      "status": "unreachable",
+      "evidence": "_dtype_code 保证 out_dtype 仅 f32/i32；host 侧为防御。"
+    },
+    "H08": {
+      "status": "unreachable",
+      "evidence": "Python 先校验 tangent 地址；host 侧为防御。"
+    },
+    "H11": {
+      "status": "unreachable",
+      "evidence": "_derive_plan 只产出标量 cond（numel=1）；host 侧为防御。"
+    },
+    "K05": {
+      "status": "unreachable",
+      "evidence": "Python 在 limit_flag=1 后停止 stage1；host_step 不会以 bodyHits>=limit 进入 stage1（防御）。"
+    },
+    "K06": {
+      "status": "hit",
+      "evidence": "黑盒 c16：第 64 次 body 后 bodyHits>=safetyLimit → limit_flag=1，不再求值 cond。"
+    },
+    "K08": {
+      "status": "hit",
+      "evidence": "黑盒 c16：WHILE_CMP_ALWAYS_TRUE → return 1。"
+    },
+    "P06": {
+      "status": "unreachable",
+      "evidence": "JAX 在 trace 期折叠字面量乘；探针 mul_consts 的 jaxpr 只剩 add,mul，公开 API 无法让两个常量操作数进入 jaxpr。"
+    },
+    "P09": {
+      "status": "hit",
+      "evidence": "负向自检 nonlinear_mul：两个非常量相乘 → UNSUPPORTED_PLAN。"
+    },
+    "P11": {
+      "status": "hit",
+      "evidence": "负向自检 div_by_nonconst：除以非常量 → UNSUPPORTED_PLAN。"
+    },
+    "P14": {
+      "status": "partial",
+      "evidence": "reshape_roundtrip/expand_squeeze 命中 n_in==n_out 的正常侧；n_in!=n_out 的 raise 侧在 while_loop 固定 shape 下不可达。"
+    },
+    "P15": {
+      "status": "unreachable",
+      "evidence": "f32→f32 被 JAX 消除（探针 astype 无 convert_element_type）；int↔float 改变 carry dtype，会先被 JAX 拒绝。"
+    },
+    "P16": {
+      "status": "hit",
+      "evidence": "负向自检 unsupported_primitive（jnp.sin）→ UNSUPPORTED_PLAN。"
+    },
+    "P18": {
+      "status": "unreachable",
+      "evidence": "JAX 常量折叠：恒假 cond 的 cond jaxpr 为空（探针 false_cond）。"
+    },
+    "P23": {
+      "status": "hit",
+      "evidence": "负向自检 all_tensor_vs_tensor → UNSUPPORTED_PLAN。"
+    },
+    "P24": {
+      "status": "hit",
+      "evidence": "黑盒 c16 的 jnp.bool_(True) 恒真 cond 命中 always_true；对应 kernel K08。"
+    },
+    "P25": {
+      "status": "hit",
+      "evidence": "负向自检 always_false_cond → UNSUPPORTED_PLAN（已知限制；0 次循环用 step<0 覆盖）。"
+    },
+    "P26": {
+      "status": "hit",
+      "evidence": "负向自检 unsupported_cond_primitive（jnp.sin(x)>0）→ UNSUPPORTED_PLAN。"
+    },
+    "P27": {
+      "status": "hit",
+      "evidence": "负向自检 same_leaf_reduce_mix（v*0.5+sum(v)）→ UNSUPPORTED_PLAN。"
+    },
+    "P28": {
+      "status": "unreachable",
+      "evidence": "0-d 标量上的 reduce_sum 被 JAX 消除，且输出 shape 必须与输入一致，重复归约不可达。"
+    },
+    "P29": {
+      "status": "unreachable",
+      "evidence": "_validate 的 jax.eval_shape(lax.while_loop) 先以 CARRY_* 拒绝，_derive_plan 的结构漂移分支不可达。"
+    },
+    "P31": {
+      "status": "hit",
+      "evidence": "黑盒 c13 while_invalid_condition 的 bool[1]/bool[2]/int scalar/float scalar 四个 variant。"
+    },
+    "P32": {
+      "status": "hit",
+      "evidence": "负向自检 cond_eval_message（cond_fun 求值抛 boolean scalar 消息）→ INVALID_CONDITION。"
+    },
+    "P33": {
+      "status": "hit",
+      "evidence": "负向自检 body_msg_structure/body_msg_shape/body_msg_dtype/body_msg_equal_types_* 5 条 + unclassifiable_body。"
+    },
+    "P34": {
+      "status": "hit",
+      "evidence": "黑盒 c14 的 tuple→dict：2 叶但结构不同，P34 先于 P35 返回 CARRY_STRUCTURE_MISMATCH。"
+    },
+    "P35": {
+      "status": "unreachable",
+      "evidence": "结构标签相同 ⇒ treedef 相同 ⇒ 叶子数必然相同；结构不同时 P34 先返回。负向自检 p35_same_structure_same_leaf_count 可执行证明。"
+    },
+    "P36": {
+      "status": "hit",
+      "evidence": "黑盒 c15 shape variant（4→5）→ CARRY_SHAPE_MISMATCH。"
+    },
+    "P37": {
+      "status": "hit",
+      "evidence": "黑盒 c15 dtype variant（f32→i32）→ CARRY_DTYPE_MISMATCH。"
+    },
+    "P38": {
+      "status": "unreachable",
+      "evidence": "P34-P37 已覆盖所有可观测漂移；此分支为保守兜底，正常/异常路径均先被 P34-P37 截获。"
+    },
+    "P42": {
+      "status": "unreachable",
+      "evidence": "正常设备路径 seq_begin 成功；失败需注入 aclInit/SetDevice/malloc 故障，公开接口不可达（防御）。"
+    },
+    "P44": {
+      "status": "hit",
+      "evidence": "黑盒 c16 while_iteration_limit_exceeded：第 64 次 body 后 limit_flag=1，host 抛 ITERATION_LIMIT_EXCEEDED，abi_calls=65。"
+    },
+    "P45": {
+      "status": "unreachable",
+      "evidence": "_validate/_derive_plan 已保证输出叶子数与计划一致；不可达。"
+    },
+    "P48": {
+      "status": "hit",
+      "evidence": "负向自检 dtype_float64/dtype_bool → invalid_argument（_dtype_code 的拒绝侧）。"
+    },
+    "P50": {
+      "status": "hit",
+      "evidence": "负向自检 container_device_id：env=3 / 身份文件=2 / 缺省=0。"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "while_wb_tile_exact_8192",
+      "group": "白盒·tile 边界",
+      "required": true,
+      "scenario": "tile_exact_8192",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "P02",
+        "P08",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51",
+        "P52"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8192
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "float32[8192] = 一个 WHILE_TILE_ELEMS：K21 的 remain<TILE 不成立（count=8192）；bytes=8192*4=32768，%32=0；body v*0.5+0.25 命中 K18/K20 与 P08/P02。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 2,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8192,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8192,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32768,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_tile_tail_8193",
+      "group": "白盒·tile 尾块",
+      "required": true,
+      "scenario": "tile_tail_8193",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "P02",
+        "P08",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51",
+        "P52"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8193
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "float32[8193]：第二个 tile remain=1<TILE（count=1），K21 尾块；bytes=8193*4=32772，%32=4。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 2,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8193,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8193,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32772,
+          "bytes_mod_32": 4
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_two_elem_terms",
+      "group": "白盒·双逐元素项",
+      "required": true,
+      "scenario": "two_elem_terms",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 1,
+      "expected_counts": {
+        "iterations": 1,
+        "body_hits": 1,
+        "cond_hits": 2,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "P02",
+        "P03",
+        "P08",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51",
+        "P52"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8,
+              4
+            ],
+            "dtype": "float32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/2",
+            "shape": [
+              8,
+              4
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "(step, a[8,4], b[8,4])：叶子1 = a*0.5+b*0.25+0.125，K18 ElemSrcA/B + K20 Muls/Add/Adds；叶子2 = b*0.75。P03 非常量相加 + P08 右常量乘。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 3,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 32,
+            "n_terms": 2,
+            "n_red": 0,
+            "n_elem": 2
+          },
+          {
+            "dtype": "float32",
+            "numel": 32,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 32,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 128,
+          "bytes_mod_32": 0
+        },
+        "carry/2": {
+          "elements": 32,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 128,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_reduce_only_scalar",
+      "group": "白盒·归约/广播",
+      "required": true,
+      "scenario": "reduce_only_scalar",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K16",
+        "K18",
+        "K19",
+        "K20",
+        "K21",
+        "K22",
+        "K24",
+        "P02",
+        "P08",
+        "P12",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51",
+        "P52"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/2",
+            "shape": [],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "(step, v[8], s)：叶子 s = sum(v)*0.001+0.5，K16 red1 + K19 srcA<0 Duplicate + K22 SumFloatLeaf；v 叶子 K18/K20。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 3,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 1,
+            "n_elem": 0
+          }
+        ],
+        "reduce_src_numels": [
+          8
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        },
+        "carry/2": {
+          "elements": 1,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_reduce_two_terms",
+      "group": "白盒·双归约项",
+      "required": true,
+      "scenario": "reduce_two_terms",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 1,
+      "expected_counts": {
+        "iterations": 1,
+        "body_hits": 1,
+        "cond_hits": 2,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K16",
+        "K17",
+        "K18",
+        "K19",
+        "K20",
+        "K21",
+        "K22",
+        "K24",
+        "P02",
+        "P03",
+        "P08",
+        "P12",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51",
+        "P52"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/2",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/3",
+            "shape": [],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "(step,a[8],b[8],s)：s = sum(a)*0.001+sum(b)*0.002+0.5，K16+K17（同叶两个归约项）+K22 两次 + K19；a/b 叶子 K18/K20。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 4,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 1,
+            "n_terms": 2,
+            "n_red": 2,
+            "n_elem": 0
+          }
+        ],
+        "reduce_src_numels": [
+          8
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        },
+        "carry/2": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        },
+        "carry/3": {
+          "elements": 1,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_reduce_scan_max_256",
+      "group": "白盒·归约上界",
+      "required": true,
+      "scenario": "reduce_scan_max_256",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H05",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K16",
+        "K18",
+        "K19",
+        "K20",
+        "K21",
+        "K22",
+        "K24",
+        "P02",
+        "P08",
+        "P12",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51",
+        "P52"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              256
+            ],
+            "dtype": "float32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/2",
+            "shape": [],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "归约源 numel=256：H05 的 >256 为 false（恰好允许），K16/K19/K22 命中；bytes=256*4=1024，%32=0。257 的拒绝侧由 while_wb_reduce_scan_over_257 执行。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 3,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 256,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 1,
+            "n_elem": 0
+          }
+        ],
+        "reduce_src_numels": [
+          256
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 256,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 1024,
+          "bytes_mod_32": 0
+        },
+        "carry/2": {
+          "elements": 1,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_int_sum_reduce",
+      "group": "白盒·int 归约",
+      "required": true,
+      "scenario": "int_sum_reduce",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K24",
+        "K26",
+        "P02",
+        "P12",
+        "P17",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8
+            ],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/2",
+            "shape": [],
+            "dtype": "int32"
+          }
+        ]
+      },
+      "note": "(step, d[8] i32, s i32)：d+1 与 sum(d)；K24 ComputeIntLeaf（red1）+ K26 SumIntLeaf。当前实现只写 4B，暴露 int32 张量截断缺陷。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 3,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 1,
+            "n_elem": 0
+          }
+        ],
+        "reduce_src_numels": [
+          8
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        },
+        "carry/2": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_int_two_reduce",
+      "group": "白盒·int 双归约",
+      "required": true,
+      "scenario": "int_two_reduce",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 1,
+      "expected_counts": {
+        "iterations": 1,
+        "body_hits": 1,
+        "cond_hits": 2,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K24",
+        "K26",
+        "P02",
+        "P03",
+        "P12",
+        "P17",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8
+            ],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/2",
+            "shape": [
+              8
+            ],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/3",
+            "shape": [],
+            "dtype": "int32"
+          }
+        ]
+      },
+      "note": "(step,a[8],b[8],s)：s=sum(a)+sum(b)，K24 的 nTerms=2 双 red + K26 两次；P03 两个归约项相加。当前实现同根因失败。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 4,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 2,
+            "n_red": 2,
+            "n_elem": 0
+          }
+        ],
+        "reduce_src_numels": [
+          8
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        },
+        "carry/2": {
+          "elements": 8,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        },
+        "carry/3": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_int_negative_round",
+      "group": "白盒·int 负向取整",
+      "required": true,
+      "scenario": "int_negative_round",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 3,
+      "expected_counts": {
+        "iterations": 3,
+        "body_hits": 3,
+        "cond_hits": 4,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K24",
+        "K25",
+        "P02",
+        "P04",
+        "P08",
+        "P17",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [],
+            "dtype": "int32"
+          }
+        ]
+      },
+      "note": "(step,c)：body c*-1-5 → P08 右常量乘 + P04 减法；K24 ComputeIntLeaf 的 const 与 elem 都走 K25 的 value<0 分支（-0.5）。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 2,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_eight_leaves",
+      "group": "白盒·叶子数上界",
+      "required": true,
+      "scenario": "eight_leaves",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K24",
+        "P02",
+        "P17",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/2",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/3",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/4",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/5",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/6",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/7",
+            "shape": [],
+            "dtype": "int32"
+          }
+        ]
+      },
+      "note": "8 个 int32 标量 carry：K01 的 i<8 上界、K24 逐叶 int 标量；9 叶的 host H01 拒绝侧在 Python 接口下不可达（见负向自检 h01_nine_leaves_public_api）。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 8,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/2": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/3": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/4": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/5": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/6": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/7": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_cond_int_ops",
+      "group": "白盒·int 条件算子",
+      "required": true,
+      "scenario": "cond_int_ops",
+      "mode": [
+        "eager"
+      ],
+      "expected_iterations": null,
+      "expected_counts": null,
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K07",
+        "K10",
+        "K11",
+        "P02",
+        "P04",
+        "P17",
+        "P19",
+        "P20",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          }
+        ]
+      },
+      "note": "int32 标量 cond 8 个 variant：le/gt/ge/gt_swap/ge_swap/eq/ne/rhs_leaf；gt、ge 直接落 K10 的 WHILE_CMP_GT/GE（start=4，body 递减），gt_swap/ge_swap 经 P20 交换成 lt/le；rhs_leaf 为 c[0]<c[1]，命中 K11 的 ReadScalarInt(rhs) 侧（condRhsLeaf=1）。",
+      "expected": "match_cpu",
+      "variants": [
+        "le",
+        "gt",
+        "ge",
+        "gt_swap",
+        "ge_swap",
+        "eq",
+        "ne",
+        "rhs_leaf"
+      ],
+      "variant_expected": {
+        "le": {
+          "iterations": 4,
+          "body_hits": 4,
+          "cond_hits": 5,
+          "limit_flag": 0
+        },
+        "gt": {
+          "iterations": 3,
+          "body_hits": 3,
+          "cond_hits": 4,
+          "limit_flag": 0
+        },
+        "ge": {
+          "iterations": 4,
+          "body_hits": 4,
+          "cond_hits": 5,
+          "limit_flag": 0
+        },
+        "gt_swap": {
+          "iterations": 3,
+          "body_hits": 3,
+          "cond_hits": 4,
+          "limit_flag": 0
+        },
+        "ge_swap": {
+          "iterations": 4,
+          "body_hits": 4,
+          "cond_hits": 5,
+          "limit_flag": 0
+        },
+        "eq": {
+          "iterations": 1,
+          "body_hits": 1,
+          "cond_hits": 2,
+          "limit_flag": 0
+        },
+        "ne": {
+          "iterations": 3,
+          "body_hits": 3,
+          "cond_hits": 4,
+          "limit_flag": 0
+        },
+        "rhs_leaf": {
+          "iterations": 3,
+          "body_hits": 3,
+          "cond_hits": 4,
+          "limit_flag": 0
+        }
+      },
+      "variant_branches": {
+        "le": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K07",
+          "K10",
+          "K11",
+          "P02",
+          "P17",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "gt": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K07",
+          "K10",
+          "K11",
+          "P04",
+          "P17",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "ge": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K07",
+          "K10",
+          "K11",
+          "P04",
+          "P17",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "gt_swap": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K07",
+          "K10",
+          "K11",
+          "P02",
+          "P17",
+          "P20",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "ge_swap": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K07",
+          "K10",
+          "K11",
+          "P02",
+          "P17",
+          "P20",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "eq": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K07",
+          "K10",
+          "K11",
+          "P02",
+          "P17",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "ne": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K07",
+          "K10",
+          "K11",
+          "P02",
+          "P17",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "rhs_leaf": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K07",
+          "K10",
+          "K11",
+          "P02",
+          "P17",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51",
+          "P19"
+        ]
+      },
+      "variant_plan": {
+        "le": {
+          "cond_op": "le",
+          "cond_is_int": true,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 1,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "gt": {
+          "cond_op": "gt",
+          "cond_is_int": true,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 1,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "ge": {
+          "cond_op": "ge",
+          "cond_is_int": true,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 1,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "gt_swap": {
+          "cond_op": "lt",
+          "cond_is_int": true,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 1,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "ge_swap": {
+          "cond_op": "le",
+          "cond_is_int": true,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 1,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "eq": {
+          "cond_op": "eq",
+          "cond_is_int": true,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 1,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "ne": {
+          "cond_op": "ne",
+          "cond_is_int": true,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 1,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "rhs_leaf": {
+          "cond_op": "lt",
+          "cond_is_int": true,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": 1,
+          "n_leaves": 2,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            },
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        }
+      },
+      "variant_tree": {
+        "le": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            }
+          ]
+        },
+        "gt": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            }
+          ]
+        },
+        "ge": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            }
+          ]
+        },
+        "gt_swap": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            }
+          ]
+        },
+        "ge_swap": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            }
+          ]
+        },
+        "eq": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            }
+          ]
+        },
+        "ne": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            }
+          ]
+        },
+        "rhs_leaf": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            },
+            {
+              "kind": "leaf",
+              "path": "carry/1",
+              "shape": [],
+              "dtype": "int32"
+            }
+          ]
+        }
+      },
+      "variant_bytes": {
+        "le": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "gt": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "ge": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "gt_swap": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "ge_swap": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "eq": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "ne": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "rhs_leaf": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          },
+          "carry/1": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_cond_float_ops",
+      "group": "白盒·float 条件算子",
+      "required": true,
+      "scenario": "cond_float_ops",
+      "mode": [
+        "eager"
+      ],
+      "expected_iterations": null,
+      "expected_counts": null,
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K12",
+        "K13",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "P02",
+        "P08",
+        "P17",
+        "P19",
+        "P20",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "float32 标量 cond 8 个 variant：lt/le/gt/ge/eq/ne/gt_swap/rhs_leaf；lt 为 leaf<const（直接 WHILE_CMP_LT）；rhs_leaf 用 x>y 命中 P19 + K13 的 ReadScalarFloat(rhs)；gt_swap 经规范化后仍为 gt。",
+      "expected": "match_cpu",
+      "variants": [
+        "le",
+        "gt",
+        "ge",
+        "eq",
+        "ne",
+        "gt_swap",
+        "rhs_leaf",
+        "lt"
+      ],
+      "variant_expected": {
+        "le": {
+          "iterations": 4,
+          "body_hits": 4,
+          "cond_hits": 5,
+          "limit_flag": 0
+        },
+        "gt": {
+          "iterations": 3,
+          "body_hits": 3,
+          "cond_hits": 4,
+          "limit_flag": 0
+        },
+        "ge": {
+          "iterations": 4,
+          "body_hits": 4,
+          "cond_hits": 5,
+          "limit_flag": 0
+        },
+        "eq": {
+          "iterations": 1,
+          "body_hits": 1,
+          "cond_hits": 2,
+          "limit_flag": 0
+        },
+        "ne": {
+          "iterations": 4,
+          "body_hits": 4,
+          "cond_hits": 5,
+          "limit_flag": 0
+        },
+        "gt_swap": {
+          "iterations": 3,
+          "body_hits": 3,
+          "cond_hits": 4,
+          "limit_flag": 0
+        },
+        "rhs_leaf": {
+          "iterations": 3,
+          "body_hits": 3,
+          "cond_hits": 4,
+          "limit_flag": 0
+        },
+        "lt": {
+          "iterations": 3,
+          "body_hits": 3,
+          "cond_hits": 4,
+          "limit_flag": 0
+        }
+      },
+      "variant_branches": {
+        "le": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K12",
+          "K13",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "K24",
+          "P02",
+          "P08",
+          "P17",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "gt": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K12",
+          "K13",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "K24",
+          "P02",
+          "P08",
+          "P17",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "ge": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K12",
+          "K13",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "K24",
+          "P02",
+          "P08",
+          "P17",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "eq": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K12",
+          "K13",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "K24",
+          "P02",
+          "P08",
+          "P17",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "ne": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K12",
+          "K13",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "K24",
+          "P02",
+          "P08",
+          "P17",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "gt_swap": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K12",
+          "K13",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "K24",
+          "P02",
+          "P08",
+          "P17",
+          "P20",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "rhs_leaf": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K12",
+          "K13",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "K24",
+          "P02",
+          "P08",
+          "P17",
+          "P19",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "lt": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K12",
+          "K13",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "K24",
+          "P02",
+          "P08",
+          "P17",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ]
+      },
+      "variant_plan": {
+        "le": {
+          "cond_op": "le",
+          "cond_is_int": false,
+          "cond_leaf": 1,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 2,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            },
+            {
+              "dtype": "float32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "gt": {
+          "cond_op": "gt",
+          "cond_is_int": false,
+          "cond_leaf": 1,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 2,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            },
+            {
+              "dtype": "float32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "ge": {
+          "cond_op": "ge",
+          "cond_is_int": false,
+          "cond_leaf": 1,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 2,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            },
+            {
+              "dtype": "float32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "eq": {
+          "cond_op": "eq",
+          "cond_is_int": false,
+          "cond_leaf": 1,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 2,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            },
+            {
+              "dtype": "float32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "ne": {
+          "cond_op": "ne",
+          "cond_is_int": false,
+          "cond_leaf": 1,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 2,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            },
+            {
+              "dtype": "float32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "gt_swap": {
+          "cond_op": "gt",
+          "cond_is_int": false,
+          "cond_leaf": 1,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 2,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            },
+            {
+              "dtype": "float32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "rhs_leaf": {
+          "cond_op": "gt",
+          "cond_is_int": false,
+          "cond_leaf": 1,
+          "cond_rhs_leaf": 2,
+          "n_leaves": 3,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            },
+            {
+              "dtype": "float32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            },
+            {
+              "dtype": "float32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "lt": {
+          "cond_op": "lt",
+          "cond_is_int": false,
+          "cond_leaf": 1,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 2,
+          "leaves": [
+            {
+              "dtype": "int32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            },
+            {
+              "dtype": "float32",
+              "numel": 1,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        }
+      },
+      "variant_tree": {
+        "le": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            },
+            {
+              "kind": "leaf",
+              "path": "carry/1",
+              "shape": [],
+              "dtype": "float32"
+            }
+          ]
+        },
+        "gt": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            },
+            {
+              "kind": "leaf",
+              "path": "carry/1",
+              "shape": [],
+              "dtype": "float32"
+            }
+          ]
+        },
+        "ge": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            },
+            {
+              "kind": "leaf",
+              "path": "carry/1",
+              "shape": [],
+              "dtype": "float32"
+            }
+          ]
+        },
+        "eq": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            },
+            {
+              "kind": "leaf",
+              "path": "carry/1",
+              "shape": [],
+              "dtype": "float32"
+            }
+          ]
+        },
+        "ne": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            },
+            {
+              "kind": "leaf",
+              "path": "carry/1",
+              "shape": [],
+              "dtype": "float32"
+            }
+          ]
+        },
+        "gt_swap": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            },
+            {
+              "kind": "leaf",
+              "path": "carry/1",
+              "shape": [],
+              "dtype": "float32"
+            }
+          ]
+        },
+        "rhs_leaf": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            },
+            {
+              "kind": "leaf",
+              "path": "carry/1",
+              "shape": [],
+              "dtype": "float32"
+            },
+            {
+              "kind": "leaf",
+              "path": "carry/2",
+              "shape": [],
+              "dtype": "float32"
+            }
+          ]
+        },
+        "lt": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [],
+              "dtype": "int32"
+            },
+            {
+              "kind": "leaf",
+              "path": "carry/1",
+              "shape": [],
+              "dtype": "float32"
+            }
+          ]
+        }
+      },
+      "variant_bytes": {
+        "le": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          },
+          "carry/1": {
+            "elements": 1,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "gt": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          },
+          "carry/1": {
+            "elements": 1,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "ge": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          },
+          "carry/1": {
+            "elements": 1,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "eq": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          },
+          "carry/1": {
+            "elements": 1,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "ne": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          },
+          "carry/1": {
+            "elements": 1,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "gt_swap": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          },
+          "carry/1": {
+            "elements": 1,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "rhs_leaf": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          },
+          "carry/1": {
+            "elements": 1,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          },
+          "carry/2": {
+            "elements": 1,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        },
+        "lt": {
+          "carry/0": {
+            "elements": 1,
+            "dtype": "int32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          },
+          "carry/1": {
+            "elements": 1,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 4,
+            "bytes_mod_32": 4
+          }
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_cond_all_ops",
+      "group": "白盒·all() 条件",
+      "required": true,
+      "scenario": "cond_all_ops",
+      "mode": [
+        "eager"
+      ],
+      "expected_iterations": null,
+      "expected_counts": null,
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K09",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "P08",
+        "P21",
+        "P22",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [
+              4
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "all(v>=c)/all(v<c)/all(v<=c)/all(const<v→all_gt)：K09 的 4 个 all_* 算子与逐元素 break；P21 reduce_and，gt_swap 额外命中 P22。",
+      "expected": "match_cpu",
+      "variants": [
+        "ge",
+        "lt",
+        "le",
+        "gt_swap"
+      ],
+      "variant_expected": {
+        "ge": {
+          "iterations": 3,
+          "body_hits": 3,
+          "cond_hits": 4,
+          "limit_flag": 0
+        },
+        "lt": {
+          "iterations": 4,
+          "body_hits": 4,
+          "cond_hits": 5,
+          "limit_flag": 0
+        },
+        "le": {
+          "iterations": 5,
+          "body_hits": 5,
+          "cond_hits": 6,
+          "limit_flag": 0
+        },
+        "gt_swap": {
+          "iterations": 2,
+          "body_hits": 2,
+          "cond_hits": 3,
+          "limit_flag": 0
+        }
+      },
+      "variant_branches": {
+        "ge": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K09",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "P08",
+          "P21",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "lt": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K09",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "P08",
+          "P21",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "le": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K09",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "P08",
+          "P21",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ],
+        "gt_swap": [
+          "H03",
+          "H04",
+          "H09",
+          "H12",
+          "K01",
+          "K02",
+          "K03",
+          "K04",
+          "K07",
+          "K09",
+          "K14",
+          "K18",
+          "K20",
+          "K21",
+          "P08",
+          "P21",
+          "P22",
+          "P30",
+          "P39",
+          "P41",
+          "P43",
+          "P46",
+          "P49",
+          "P51"
+        ]
+      },
+      "variant_plan": {
+        "ge": {
+          "cond_op": "all_ge",
+          "cond_is_int": false,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 1,
+          "leaves": [
+            {
+              "dtype": "float32",
+              "numel": 4,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "lt": {
+          "cond_op": "all_lt",
+          "cond_is_int": false,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 1,
+          "leaves": [
+            {
+              "dtype": "float32",
+              "numel": 4,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "le": {
+          "cond_op": "all_le",
+          "cond_is_int": false,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 1,
+          "leaves": [
+            {
+              "dtype": "float32",
+              "numel": 4,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        },
+        "gt_swap": {
+          "cond_op": "all_gt",
+          "cond_is_int": false,
+          "cond_leaf": 0,
+          "cond_rhs_leaf": -1,
+          "n_leaves": 1,
+          "leaves": [
+            {
+              "dtype": "float32",
+              "numel": 4,
+              "n_terms": 1,
+              "n_red": 0,
+              "n_elem": 1
+            }
+          ]
+        }
+      },
+      "variant_tree": {
+        "ge": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [
+                4
+              ],
+              "dtype": "float32"
+            }
+          ]
+        },
+        "lt": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [
+                4
+              ],
+              "dtype": "float32"
+            }
+          ]
+        },
+        "le": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [
+                4
+              ],
+              "dtype": "float32"
+            }
+          ]
+        },
+        "gt_swap": {
+          "kind": "tuple",
+          "children": [
+            {
+              "kind": "leaf",
+              "path": "carry/0",
+              "shape": [
+                4
+              ],
+              "dtype": "float32"
+            }
+          ]
+        }
+      },
+      "variant_bytes": {
+        "ge": {
+          "carry/0": {
+            "elements": 4,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 16,
+            "bytes_mod_32": 16
+          }
+        },
+        "lt": {
+          "carry/0": {
+            "elements": 4,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 16,
+            "bytes_mod_32": 16
+          }
+        },
+        "le": {
+          "carry/0": {
+            "elements": 4,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 16,
+            "bytes_mod_32": 16
+          }
+        },
+        "gt_swap": {
+          "carry/0": {
+            "elements": 4,
+            "dtype": "float32",
+            "dtype_size": 4,
+            "bytes": 16,
+            "bytes_mod_32": 16
+          }
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_all_scan_max_256",
+      "group": "白盒·all 上界",
+      "required": true,
+      "scenario": "all_scan_max_256",
+      "mode": [
+        "eager"
+      ],
+      "expected_iterations": 0,
+      "expected_counts": {
+        "iterations": 0,
+        "body_hits": 0,
+        "cond_hits": 1,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H10",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K07",
+        "K09",
+        "P08",
+        "P12",
+        "P21",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [
+              256
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "all() 条件叶 numel=256：H10 的 >256 为 false；v[255]<0 使 K09 扫满 256 后在最后一个元素 break，0 次循环（K04/K14/K18/K20/K21 不执行）。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "all_gt",
+        "cond_is_int": false,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 1,
+        "leaves": [
+          {
+            "dtype": "float32",
+            "numel": 256,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 256,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 1024,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_jvp_two_terms",
+      "group": "白盒·JVP 双项",
+      "required": true,
+      "scenario": "jvp_two_terms",
+      "mode": [
+        "jvp_eager",
+        "jvp_jit"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K15",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "K27",
+        "P02",
+        "P03",
+        "P08",
+        "P17",
+        "P30",
+        "P39",
+        "P40",
+        "P41",
+        "P43",
+        "P46",
+        "P47",
+        "P49",
+        "P51",
+        "P52",
+        "P53",
+        "P54"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              4,
+              8
+            ],
+            "dtype": "float32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/2",
+            "shape": [
+              4,
+              8
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "切线 (float0, f32[4,8], f32[4,8])：K15 hasTangent/tanOut、K27 tins/touts 非空；切线 ta*1.5+tb*0.25；P47/P53/P54 覆盖 float0 nbytes=0。",
+      "expected": "match_cpu",
+      "tangent_tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "tangent/0",
+            "shape": [],
+            "dtype": "float0"
+          },
+          {
+            "kind": "leaf",
+            "path": "tangent/1",
+            "shape": [
+              4,
+              8
+            ],
+            "dtype": "float32"
+          },
+          {
+            "kind": "leaf",
+            "path": "tangent/2",
+            "shape": [
+              4,
+              8
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 3,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 32,
+            "n_terms": 2,
+            "n_red": 0,
+            "n_elem": 2
+          },
+          {
+            "dtype": "float32",
+            "numel": 32,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 32,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 128,
+          "bytes_mod_32": 0
+        },
+        "carry/2": {
+          "elements": 32,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 128,
+          "bytes_mod_32": 0
+        },
+        "tangent/0": {
+          "elements": 1,
+          "dtype": "float0",
+          "dtype_size": 0,
+          "bytes": 0,
+          "bytes_mod_32": 0
+        },
+        "tangent/1": {
+          "elements": 32,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 128,
+          "bytes_mod_32": 0
+        },
+        "tangent/2": {
+          "elements": 32,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 128,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_jvp_reduce_term",
+      "group": "白盒·JVP 归约项",
+      "required": true,
+      "scenario": "jvp_reduce_term",
+      "mode": [
+        "jvp_eager",
+        "jvp_jit"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K15",
+        "K16",
+        "K18",
+        "K20",
+        "K21",
+        "K22",
+        "K23",
+        "K24",
+        "K27",
+        "P02",
+        "P03",
+        "P08",
+        "P12",
+        "P17",
+        "P30",
+        "P39",
+        "P40",
+        "P41",
+        "P43",
+        "P46",
+        "P47",
+        "P49",
+        "P51",
+        "P52",
+        "P53",
+        "P54"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/2",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "primal a*0.5+mean(b)+0.25，切线 ta*0.5+sum(tb)/8：K16+K22 primal 归约、K23 SumFloatLeaf(tangent) 归约切线。",
+      "expected": "match_cpu",
+      "tangent_tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "tangent/0",
+            "shape": [],
+            "dtype": "float0"
+          },
+          {
+            "kind": "leaf",
+            "path": "tangent/1",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          },
+          {
+            "kind": "leaf",
+            "path": "tangent/2",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 3,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8,
+            "n_terms": 2,
+            "n_red": 1,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ],
+        "reduce_src_numels": [
+          8
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        },
+        "carry/2": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        },
+        "tangent/0": {
+          "elements": 1,
+          "dtype": "float0",
+          "dtype_size": 0,
+          "bytes": 0,
+          "bytes_mod_32": 0
+        },
+        "tangent/1": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        },
+        "tangent/2": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_stop_gradient",
+      "group": "白盒·shape 保持原语",
+      "required": true,
+      "scenario": "stop_gradient",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "P02",
+        "P08",
+        "P13",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51",
+        "P52"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "body stop_gradient(v)*0.5+0.25：jaxpr 的 stop_gradient 走 P13 copy 分支。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 2,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_copy",
+      "group": "白盒·shape 保持原语",
+      "required": true,
+      "scenario": "copy",
+      "mode": [
+        "eager"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "P02",
+        "P08",
+        "P13",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "body jnp.array(v)*0.5+0.25：P13 copy 原语。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 2,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_reshape_roundtrip",
+      "group": "白盒·shape 保持原语",
+      "required": true,
+      "scenario": "reshape_roundtrip",
+      "mode": [
+        "eager"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "P02",
+        "P08",
+        "P13",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              4,
+              4
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "v[4,4]→reshape(2,8)→reshape(4,4)：P13 reshape 两次；P14 的 n_in==n_out 正常侧。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 2,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 16,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 16,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 64,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_expand_squeeze",
+      "group": "白盒·shape 保持原语",
+      "required": true,
+      "scenario": "expand_squeeze",
+      "mode": [
+        "eager"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "P02",
+        "P08",
+        "P13",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              4,
+              4
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "expand_dims→broadcast_in_dim，squeeze 撤销：P13；numel 不变（P14 正常侧）。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 2,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 16,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 16,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 64,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_sub_div_neg",
+      "group": "白盒·算术原语",
+      "required": true,
+      "scenario": "sub_div_neg",
+      "mode": [
+        "eager"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P08",
+        "P10",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "body 0.5 - v/4 + (-v)*0.125：P04 sub、P10 除常量、P05 neg、P03 非常量相加、P08 右常量乘；线性化 scale=-0.375、const=0.5。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 2,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_const_left_add",
+      "group": "白盒·算术原语",
+      "required": true,
+      "scenario": "const_left_add",
+      "mode": [
+        "eager"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "P01",
+        "P02",
+        "P03",
+        "P07",
+        "P08",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "body 0.5*v + (0.25 + v*0.125)：P07 左常量乘、P01 左常量加、P03 两个非常量相加、P08 右常量乘；P02 步进。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 2,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_plan_cache_hit",
+      "group": "白盒·计划缓存",
+      "required": true,
+      "scenario": "copy",
+      "mode": [
+        "jit"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K18",
+        "K20",
+        "K21",
+        "K24",
+        "P02",
+        "P08",
+        "P13",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51",
+        "P52"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "同一 fresh worker 内对同一 plan_id 连续调用 2 次：第一次 P41 miss、第二次 P41 hit；两次输出均与 golden 一致。",
+      "expected": "match_cpu",
+      "repeat": 2,
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 2,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_reduce_scan_over_257",
+      "group": "白盒·归约上界拒绝",
+      "required": true,
+      "scenario": "reduce_scan_over_257",
+      "mode": [
+        "eager"
+      ],
+      "expected_iterations": null,
+      "expected_counts": null,
+      "source_branches": [
+        "H03",
+        "H04",
+        "H05",
+        "H12",
+        "P02",
+        "P08",
+        "P12",
+        "P17",
+        "P30",
+        "P39",
+        "P41",
+        "P49"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              257
+            ],
+            "dtype": "float32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/2",
+            "shape": [],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "归约源 numel=257：host ABI H05 的 >WHILE_SCAN_MAX(256) 为 true，step 返回 BAD_ARGS，Python 归一化为 device_error；kernel 未 launch。",
+      "expected": "reject",
+      "expected_error": "device_error",
+      "expected_error_contains": [
+        "归约源",
+        "numel=257",
+        "256"
+      ],
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 3,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 257,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "float32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 1,
+            "n_elem": 0
+          }
+        ],
+        "reduce_src_numels": [
+          257
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 257,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 1028,
+          "bytes_mod_32": 4
+        },
+        "carry/2": {
+          "elements": 1,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_all_scan_over_257",
+      "group": "白盒·all 上界拒绝",
+      "required": true,
+      "scenario": "all_scan_over_257",
+      "mode": [
+        "eager"
+      ],
+      "expected_iterations": null,
+      "expected_counts": null,
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H10",
+        "H12",
+        "P08",
+        "P21",
+        "P30",
+        "P39",
+        "P41",
+        "P49"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [
+              257
+            ],
+            "dtype": "float32"
+          }
+        ]
+      },
+      "note": "all() 条件叶 numel=257：host ABI H10 的 >WHILE_SCAN_MAX(256) 为 true，step 返回 BAD_ARGS，Python 归一化为 device_error；kernel 未 launch。",
+      "expected": "reject",
+      "expected_error": "device_error",
+      "expected_error_contains": [
+        "all()",
+        "numel=257",
+        "256"
+      ],
+      "expected_plan": {
+        "cond_op": "all_gt",
+        "cond_is_int": false,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 1,
+        "leaves": [
+          {
+            "dtype": "float32",
+            "numel": 257,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 257,
+          "dtype": "float32",
+          "dtype_size": 4,
+          "bytes": 1028,
+          "bytes_mod_32": 4
+        }
+      }
+    },
+    {
+      "case_id": "while_wb_int_two_elem_terms",
+      "group": "白盒·int 双逐元素项",
+      "required": true,
+      "scenario": "int_two_elem_terms",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 1,
+      "expected_counts": {
+        "iterations": 1,
+        "body_hits": 1,
+        "cond_hits": 2,
+        "limit_flag": 0
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 8,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        },
+        "carry/2": {
+          "elements": 8,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 32,
+          "bytes_mod_32": 0
+        }
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K24",
+        "P02",
+        "P03",
+        "P08",
+        "P17",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [
+              8
+            ],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/2",
+            "shape": [
+              8
+            ],
+            "dtype": "int32"
+          }
+        ]
+      },
+      "note": "(step, a[8] i32, b[8] i32)：叶 1 = 2*a + 3*b，nTerms=2 且 outRed2=0，命中 ComputeIntLeaf 的源 2 逐元素侧；叶 2 = b+1 命中源 1 逐元素。预计暴露同一 int32 张量截断算子缺陷，保留 FAIL 并归属。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 3,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 8,
+            "n_terms": 2,
+            "n_red": 0,
+            "n_elem": 2
+          },
+          {
+            "dtype": "int32",
+            "numel": 8,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "while_wb_int_const_leaf",
+      "group": "白盒·int 常量叶",
+      "required": true,
+      "scenario": "int_const_leaf",
+      "mode": [
+        "eager",
+        "jit"
+      ],
+      "expected_iterations": 2,
+      "expected_counts": {
+        "iterations": 2,
+        "body_hits": 2,
+        "cond_hits": 3,
+        "limit_flag": 0
+      },
+      "bytes": {
+        "carry/0": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        },
+        "carry/1": {
+          "elements": 1,
+          "dtype": "int32",
+          "dtype_size": 4,
+          "bytes": 4,
+          "bytes_mod_32": 4
+        }
+      },
+      "source_branches": [
+        "H03",
+        "H04",
+        "H09",
+        "H12",
+        "K01",
+        "K02",
+        "K03",
+        "K04",
+        "K07",
+        "K11",
+        "K14",
+        "K24",
+        "P02",
+        "P17",
+        "P39",
+        "P41",
+        "P43",
+        "P46",
+        "P49",
+        "P51"
+      ],
+      "tree": {
+        "kind": "tuple",
+        "children": [
+          {
+            "kind": "leaf",
+            "path": "carry/0",
+            "shape": [],
+            "dtype": "int32"
+          },
+          {
+            "kind": "leaf",
+            "path": "carry/1",
+            "shape": [],
+            "dtype": "int32"
+          }
+        ]
+      },
+      "note": "(step, k i32)：body 输出 k=7 的纯常量叶，计划 n_terms=0，命中 ComputeIntLeaf 的 const 子路径；标量 int32，不触发张量截断。",
+      "expected": "match_cpu",
+      "expected_plan": {
+        "cond_op": "lt",
+        "cond_is_int": true,
+        "cond_leaf": 0,
+        "cond_rhs_leaf": -1,
+        "n_leaves": 2,
+        "leaves": [
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 1,
+            "n_red": 0,
+            "n_elem": 1
+          },
+          {
+            "dtype": "int32",
+            "numel": 1,
+            "n_terms": 0,
+            "n_red": 0,
+            "n_elem": 0
+          }
+        ]
+      }
+    }
+  ]
+}

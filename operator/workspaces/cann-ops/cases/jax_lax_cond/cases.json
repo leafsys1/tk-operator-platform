@@ -1,0 +1,177 @@
+{
+  "schema": "opx-cases/1",
+  "op": "jax_lax_cond",
+  "spec_version": 1,
+  "criteria_ref": "ops-precision-standard@1",
+  "runtime": {
+    "python": "3.11",
+    "jax": "0.8.1",
+    "backend": "xla-npu/AFIR",
+    "oracle": "同版本 JAX CPU"
+  },
+  "evidence_policy": {
+    "mode_separation": true,
+    "xfail_or_unsupported_is_pass": false,
+    "branch_hit_requires_raw_evidence": true,
+    "error_normalization_keeps_upstream_summary": true
+  },
+  "case_groups": ["基本分支", "jit", "pytree", "分支证据", "自动微分", "边界与规模", "错误分类"],
+  "cases": [
+    {
+      "case_id": "cond_true_eager",
+      "group": "基本分支",
+      "required": true,
+      "pred": true,
+      "operand": "float32[8,16]",
+      "branches": ["x + 1", "x - 1"],
+      "mode": ["eager"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "cond_false_eager",
+      "group": "基本分支",
+      "required": true,
+      "pred": false,
+      "operand": "float32[8,16]",
+      "branches": ["x + 1", "x - 1"],
+      "mode": ["eager"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "cond_jit_static_pred",
+      "group": "jit",
+      "required": true,
+      "pred": "static_scalar_bool",
+      "operand": "float32[4,17]",
+      "branches": ["x * 2", "x / 2"],
+      "mode": ["jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "cond_jit_dynamic_pred",
+      "group": "jit",
+      "required": true,
+      "pred": "dynamic_scalar_bool",
+      "operand": "float32[4,33]",
+      "branches": ["x * 2", "x / 2"],
+      "mode": ["jit_true", "jit_false"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "cond_input_pytree",
+      "group": "pytree",
+      "required": true,
+      "pred": "scalar_bool",
+      "operand": "dict(a:float32[6,4], b:float32[6,2])",
+      "branches": ["tree_add", "tree_sub"],
+      "mode": ["eager_true", "eager_false", "jit_true", "jit_false"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "cond_output_pytree",
+      "group": "pytree",
+      "required": true,
+      "pred": "scalar_bool",
+      "operand": "float32[7,5]",
+      "output": "tuple(float32[7,5], dict(aux:float32[7]))",
+      "mode": ["eager_true", "eager_false", "jit_true", "jit_false"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "cond_both_branches_traced",
+      "group": "分支证据",
+      "required": true,
+      "pred": true,
+      "operand": "float32[8]",
+      "mode": ["eager", "jit"],
+      "evidence": "trace counters plus jaxpr/raw compile evidence show true and false branches traced",
+      "expected": "both_branches_traced"
+    },
+    {
+      "case_id": "cond_selected_branch_only_executes",
+      "group": "分支证据",
+      "required": true,
+      "pred": "scalar_bool",
+      "operand": "float32[8]",
+      "mode": ["eager_true", "eager_false", "jit_true", "jit_false"],
+      "evidence": "raw backend/ABI execution counters separated by mode",
+      "expected": "only_selected_branch_runtime_hit"
+    },
+    {
+      "case_id": "cond_grad_true",
+      "group": "自动微分",
+      "required": true,
+      "pred": true,
+      "operand": "float32[5,4]",
+      "differentiate": "operand_only",
+      "mode": ["grad_eager", "grad_jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "cond_grad_false",
+      "group": "自动微分",
+      "required": true,
+      "pred": false,
+      "operand": "float32[5,4]",
+      "differentiate": "operand_only",
+      "mode": ["grad_eager", "grad_jit"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "cond_unaligned_tail_widths",
+      "group": "边界与规模",
+      "required": true,
+      "pred": "scalar_bool",
+      "dtype": "float32",
+      "elements": [17, 33],
+      "bytes": [68, 132],
+      "bytes_mod_32": [4, 4],
+      "mode": ["eager_true", "eager_false", "jit_true", "jit_false"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "cond_large_tensor",
+      "group": "边界与规模",
+      "required": true,
+      "pred": "scalar_bool",
+      "operand": "float32[1024,256]",
+      "mode": ["eager_true", "eager_false", "jit_true", "jit_false"],
+      "expected": "match_cpu"
+    },
+    {
+      "case_id": "cond_invalid_predicate",
+      "group": "错误分类",
+      "required": true,
+      "pred_inputs": ["bool[1]", "bool[2]", "int32(0)", "int32(1)"],
+      "mode": ["eager", "jit"],
+      "expected_error": "INVALID_PREDICATE"
+    },
+    {
+      "case_id": "cond_branch_structure_mismatch",
+      "group": "错误分类",
+      "required": true,
+      "true_output": "tuple(float32[4], float32[4])",
+      "false_output": "dict(x:float32[4], y:float32[4])",
+      "mode": ["eager", "jit"],
+      "expected_error": "BRANCH_STRUCTURE_MISMATCH"
+    },
+    {
+      "case_id": "cond_branch_shape_mismatch",
+      "group": "错误分类",
+      "required": true,
+      "true_output": "float32[4]",
+      "false_output": "float32[5]",
+      "mode": ["eager", "jit"],
+      "expected_error": "BRANCH_SHAPE_MISMATCH"
+    },
+    {
+      "case_id": "cond_branch_dtype_mismatch",
+      "group": "错误分类",
+      "required": true,
+      "true_output": "float32[4]",
+      "false_output": "int32[4]",
+      "mode": ["eager", "jit"],
+      "expected_error": "BRANCH_DTYPE_MISMATCH"
+    }
+  ]
+}
