@@ -187,3 +187,15 @@
 - **仓库改名**：`tk-unified-platform` → `tk-operator-platform`（`gh repo rename`，旧地址自动 301；本地 remote、README、LEDGER 已同步）。
 - **发现并修复 v0.1.0 的一个真实缺陷**：`operator/web/dist/` 当时被 `--exclude='dist'` 排除，**从未入库**，而 `setup-operator.sh` 用 `rsync --delete` 同步 `operator/web/` —— 新机器按 README 部署会把前端 dist 同步成空目录，页面直接 404。本次把构建产物入库并更新 README 指纹表。
 - 验证：网关单测 `43 passed, 3 subtests`（新增 2 条契约：工作区块对齐算子卡片、两侧不得再有明暗切换）；部署侧回读 `sha256(gateway)=824ae2f8…`、`sha256(model index.html)=bfce3ced…` 与仓库一致。
+
+## 修两个实测缺陷 + 补跑并发与五类覆盖（2026-11-04 12:4x–13:2x）
+
+- **缺陷 1（模型平台 50 字截断）已修并实测**：`parseModels()` 去掉 `.slice(0,50)`，抽出 `MAX_MODELS=50`；计数超限显示「N 个模型（超过单次上限 50）」，提交提示「一次最多提交 50 个模型，当前 N 个」并拦下。实测 51 行 → 拦下且**未创建任务**（状态仍「待提交」）；50 行 → 正常；输入变化会清旧错误。
+- **缺陷 2（算子平台建轮次不刷新）已修并实测**：`handleCreated()` 改为先 `onChanged()` 再补附属数据（失败不阻断），`refreshAll()` 的 `onChanged()` 移入 `finally`。实测建轮次前后页头「轮次」1→2，**未点刷新 12 秒内自动出现**（修复前永久不出现）。
+- **顺带发现平台真实约束**：同一任务同时只允许一个未关闭轮次，再建会被拦并红字提示「思路 #N 的 Loop #M 尚未采纳或否决；优化点必须串行验证」。否决用**浏览器原生 prompt + confirm**（confirm 取消 = 只否决不回退）。两条都已写进用例文档。
+- **TC-011 并发实测（3 任务 + 2 任务两轮）**：同一时刻运行的任务分别占卡 5/6/7 与 4/7/5，**互不相同**；任务失败释放后卡号被后续任务复用（7→pyannote、6→internimage/HelixFold3），时间不重叠，属正常。算力提示条随分配/释放实时变化（4/4→3/4→2/4→1/3）。
+- **TC-010 排队分支首次实测到**：3 张卡在用时另 2 个任务进入排队，日志「算力已满（3/8 张卡在用）→ 进入排队，前面还有 0 个任务」，列表状态「排队中 / 等待空闲卡」。
+- **TC-024 五类覆盖实测结论（重要）**：批量 11 个模型里 `nlp/esm2`、`cv/internimage`、`audio/soundchoice-g2p` **成功**；`multi-modal` 3 个候选（yolo_x_layout / Florence-2-base / PhotoMaker）与 `scientific-computing` 3 个候选（viscosity_of_gas / MDGEN / HelixFold3）**全部失败**。失败原因均为模型侧（E桶 / C桶 / 未分类），与并发无关。→ 用例文档改为「统计口径一致 + 结果如实呈现」，不再断言五类都有成功实例。
+- **TC-013 失败模型已内置**：改用语料库内 `AI-ModelScope/PhotoMaker`（E · 模型结构与自定义代码，`no model_index.json`），备用 `microsoft/Florence-2-base`（C · 算子）。**不再需要送测方提供失败模型**。
+- **新增已知问题 2.5**：配方命中 ≠ 现在能跑——配方不含环境指纹（镜像 digest / 依赖版本 / 验证时间），栈一变就静默失效。已在 `docs/04-known-issues.md` 记录 11 个模型的实测结果与修法建议。
+- 文档：`docs/testcases/天宽科技智能开发工作台_测试用例_v0.1.3_合并版.docx`（46 页 / 38 条），目录 26 条页码逐条一致、无空白页、无孤行。

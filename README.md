@@ -107,6 +107,7 @@ bash deploy/verify.sh
 | `deploy/verify.sh` | 进程/端口/回环/壳页/缓存头/两侧 API/端点探测 | FAIL 非零退出 |
 | `deploy/rollback.sh` | 回退任意组件 | 回退后自动 curl 验证 |
 | `deploy/scan_secrets.py` | 提交前脱敏扫描 | 有敏感内容非零退出 |
+| `docs/testcases/` | 对外测试用例（v0.1.3 合并版 docx）+ 逐条实测记录 + 合并说明 |
 | `deploy/selftest-render.sh` | 用假 site.env 渲染三个 unit，检查路径/端口/用户是否都被正确替换 | 有任何一项没替换就失败 |
 | `deploy/selftest-run.sh` | 全程 28078/28090/28080 + /tmp，起两个假上游实际验路由 | 路由错就失败 |
 
@@ -137,17 +138,17 @@ git log --oneline v0.1.0..HEAD        # 相对某个基线改了什么
 git diff v0.1.0 -- shell/gateway.py   # 只看网关改动
 ```
 
-当前基线 `v0.1.1` 的文件指纹（与生产机实测一致，可用于核对是否漂移）：
+当前基线 `v0.1.3` 的文件指纹（与生产机实测一致，可用于核对是否漂移）：
 
 | 文件 | SHA-256 前 16 位 |
 |---|---|
-| `shell/gateway.py` | `824ae2f888a0bf71` |
+| `shell/gateway.py` | `d358897b5921527e` |
 | `shell/portal.html` | `78fb21207384477d` |
 | `shell/tanku-logo.png` | `cd75e9b829711b8c` |
 | `model-platform/app.py` | `071229de59bf99fc` |
-| `model-platform/static/index.html` | `bfce3ced31ca78dc` |
-| `operator/web/dist/index.html` | `4c96ef8a3d56b484` |
-| `operator/web/dist/assets/index-Cy1qBUO3.js` | `23c44e4eb522e614` |
+| `model-platform/static/index.html` | `4a9c54e39024684f` |
+| `operator/web/dist/index.html` | `29ed7c4b516735b0` |
+| `operator/web/dist/assets/index-kcZUWMFK.js` | 构建产物，随 dist 一起核对 |
 
 回退、灰度、双跑、数据切换的做法见 `docs/05-operations.md`。
 

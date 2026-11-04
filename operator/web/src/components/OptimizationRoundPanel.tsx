@@ -1252,8 +1252,14 @@ export default function OptimizationRoundPanel({
       `已建轮次 #${res.loop.id}（基线存档 #${res.baseline_savepoint.id}${attached}）` +
         "。先跑基线，再让 agent 改代码，回这里跑候选验证。",
     );
-    await loadSavepoints();
+    // 先让父级重拉任务（轮次卡片立刻出现），再去补附属数据：
+    // 附属请求慢或失败都不能让「轮次」停在旧值（实测修复前要手动点「刷新」才出现）。
     onChanged();
+    try {
+      await loadSavepoints();
+    } catch {
+      /* 非致命：保存点列表下一拍会自己拉回来 */
+    }
   };
 
   const refreshAll = async () => {
@@ -1283,10 +1289,12 @@ export default function OptimizationRoundPanel({
       for (const r of rounds) void readAutoRun(r.id);
       // 顺带重拉可归档轮次的报告列表（append-only；失败只写到各自小块里）
       for (const id of archiveLoopIds) void loadReports(id);
-      onChanged();
     } catch (e) {
       // 预算审计等失败不再静默吞：面板顶部显式报错
       setErr(`刷新失败：${errorText(e)}`);
+    } finally {
+      // 父级刷新放 finally：任何附属请求失败都不能让「轮次列表」停在旧值
+      onChanged();
     }
   };
 

@@ -77,6 +77,45 @@
 
 ---
 
+## 2.5 【高·真实】「命中已验证配方」不等于现在能跑：配方没有环境指纹
+
+**现象**：语料库里标为「已迁移」的模型，重新提交迁移却在「验证推理」阶段失败，
+事件流先给「命中已验证配方：加载路线 X，依赖 Y，历史耗时 Zs」，紧接着 `模型加载失败`。
+
+**实测（2026-11-04，一次批量提交 11 个模型）**：
+
+| 类别 | 模型 | 结果 | 错误分桶 |
+|---|---|---|---|
+| nlp | `facebook/esm2_t6_8M_UR50D` | ✅ 成功 | — |
+| cv | `OpenGVLab/internimage_t_1k_224` | ✅ 成功 | — |
+| audio | `speechbrain/soundchoice-g2p` | ✅ 成功 | — |
+| audio | `pyannote/segmentation` | ❌ | 未分类（`HFValidationError: Repo id must be…'/workspace/model'`） |
+| multi-modal | `AI-ModelScope/yolo_x_layout` | ❌ | 未分类（`KeyError: Unknown task document-understanding`） |
+| multi-modal | `microsoft/Florence-2-base` | ❌ | **C · 算子**（所有前向签名均失败） |
+| multi-modal | `AI-ModelScope/PhotoMaker` | ❌ | **E · 模型结构与自定义代码**（`no model_index.json`） |
+| scientific | `ai4s/viscosity_of_gas` | ❌ | 未分类（`未实现该框架: unknown`） |
+| scientific | `ai4s/MDGEN` | ❌ | 未分类（同上） |
+| scientific | `ai4s/HelixFold3` | ❌ | 未分类（同上） |
+
+**根因（已实测到代码层）**：`load_recipes()` 只判断 `probe.json` / `recipe.json` 里
+`loaded == true`，就把它当「已验证配方」走 fast route；配方里**不含镜像 digest、依赖版本、
+框架版本**，也没有「这条配方是什么时候、在什么环境下验证的」。推理栈或镜像一变，
+历史配方就静默失效，而页面仍在日志里宣称「命中已验证配方」。
+
+**影响**：高。会让人误以为「这个模型迁过了、肯定能过」，实际跑起来失败；批量迁移时失败率被低估。
+不是并发导致——上表失败项换成单跑同样失败（本次也观察到：并发期间失败的三个任务，
+分别拿到不同卡号，失败原因全部是模型侧报错，与卡竞争无关）。
+
+**现在怎么绕**：把「命中配方」只当**加速提示**，不当成功承诺；判据一律以
+`validate_infer` 阶段的 `模型加载成功` / `端到端加载验证通过` 为准。
+
+**正确修法**（未做）：
+- 配方随记录存环境指纹（镜像 digest、CANN/驱动版本、关键依赖版本、验证时间）；
+- fast route 前比对当前环境指纹，不一致则降级为 slow route 并在日志里说明「配方环境已变化，转逐步迁移」；
+- 失败诊断里区分「配方过期」与「模型本身不支持」，别都归到「未分类」。
+
+---
+
 ## 3. 【高·安全】模型平台有命令拼接，输入未净化
 
 **现象**：`app.py` 里 `download_model()` / `run_migration()` 把用户提交的模型名

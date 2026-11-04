@@ -1275,17 +1275,23 @@
     'google/electra-small-generator'
   ];
 
+  // 单次提交上限。注意 parseModels 不再截断：截断后 `models.length > MAX_MODELS`
+  // 永远不成立，那条「一次最多提交 50 个模型」的提示就永远不会出现（实测踩过）。
+  const MAX_MODELS = 50;
+
   function parseModels(text) {
     return [...new Set(String(text || '')
       .split(/[\n\r,，;；]+/)
       .flatMap(x => x.split(/\s{2,}/))
       .map(x => x.trim())
-      .filter(x => x && x.includes('/') && !/\s/.test(x)))].slice(0, 50);
+      .filter(x => x && x.includes('/') && !/\s/.test(x)))];
   }
 
   function updateCounter() {
     const n = parseModels($('model-input').value).length;
-    $('model-counter').textContent = n + ' 个模型';
+    $('model-counter').textContent = n > MAX_MODELS
+      ? n + ' 个模型（超过单次上限 ' + MAX_MODELS + '）'
+      : n + ' 个模型';
   }
 
   function autoGrow() {
@@ -1305,8 +1311,8 @@
       $('model-input').focus();
       return;
     }
-    if (models.length > 50) {
-      formError('一次最多提交 50 个模型');
+    if (models.length > MAX_MODELS) {
+      formError('一次最多提交 ' + MAX_MODELS + ' 个模型，当前 ' + models.length + ' 个');
       return;
     }
     formError('');
@@ -1382,7 +1388,7 @@
       $('migration-form').requestSubmit();
     }
   });
-  $('model-input').addEventListener('input', () => { autoGrow(); updateCounter(); });
+  $('model-input').addEventListener('input', () => { autoGrow(); updateCounter(); formError(''); });
 
   document.querySelectorAll('[data-example]').forEach(b => {
     b.addEventListener('click', () => {
