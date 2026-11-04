@@ -161,3 +161,16 @@
 - **模型迁移平台：没有 agent，也没有大模型**。证据：① `_platform/app.py`（1432 行）全部 import 只有 stdlib + `http.server` + `urllib.parse`，**连 HTTP 客户端都没有导入**，物理上无法调用任何 LLM API；② 全仓（含远端 `_probe/*.sh`）grep `openai|anthropic|chat/completions|deepseek|llm|agent` 命中 **0**；③ 其"智能"= 配方库 `recipes`（命中走 fast route）+ 坑库 `_manifest/pitfalls.json` 由 `diagnose()` 做关键词子串打分（bucket A/B/C/E 加权，`app.py:304–334`）+ 远端 shell 探针里的 `torch_npu` 真推理。平台职责按 README 为「只做派发与回收」：SSH 派发 → 算力机 `probe.sh`/`mk_image.sh` → rsync 回收 → 本地规则诊断。
 - 该机另有两个 AI 相关服务但**都不是 8090 的后端**：`dsh web`（127.0.0.1:3080，pid 2298015）、`ekko-studio` server（0.0.0.0:7501，pid 1030923）。8090 本身 `python3 _platform/app.py`（pid 4136588）+ `auth_proxy.py 8095→8090`。
 - 结论影响：统一入口里模型页签的"agent 感"来自流水线 phase 事件（`emit()`），不是 LLM 生成；若要让模型平台具备真正的 agent 能力（自动诊断/自动改写配方），当前代码里没有任何基础，需要新增而非配置。
+
+## 代码入库与版本管理（2026-11-04 10:0x-10:40）
+
+- 仓库：`git@github.com:leafsys1/tk-unified-platform.git`（**private**，owner leafsys1），默认分支 `main`，基线 tag `v0.1.0`。
+- 入库内容（500+ 文件 / 13MB）：`shell/`（网关+页面+Logo+42 单测）、`operator/`（backend 143 个 .py、web 源码+dist、workspaces/cann-ops 工作区模板、ops/scripts/docs/config）、`model-platform/`（app.py 1432 行 + static + start.sh）、`compute-side/_probe/`（11 个探针脚本）、`deploy/`（site.env 单一配置 + 3 个 setup + verify + rollback + 脱敏扫描 + 2 个自测）、`docs/`（架构/部署/验证/已知问题/运维 5 篇 + 索引）、`tools/`（17 个 Playwright 与 NPU 判别脚本）、`LEDGER.md`。
+- **不入库**：所有密钥/私钥/`access.txt`/`site.env`、`runs/`、`archives/`、`reports/`、`node_modules`、`control-venv312`、`build/`、`.dsh/`/`.opx-chat/` 会话目录、`*.db`。脱敏扫描 `deploy/scan_secrets.py` 对 500 文件通过（测试夹具里的假私钥/假口令已人工核对后按路径豁免）。
+- 三次修正（都是自测发现，不是推测）：
+  1. 首推漏了 `operator/workspaces/cann-ops/`，导致 `test_deployment_run_root.py` 找不到 `scripts/nm.sh` 失败 → 补齐。
+  2. `shell/tests` 三个用例用 `Path(__file__).with_name()` 找 `gateway.py`/`portal.html`（开发期同目录布局），入库后分层就失效 → 新增 `_paths.py` 兼容两种布局。
+  3. **`setup-shell.sh` 改上游端口从来没生效过**：sed 写的是 `("127.0.0.1", 8090)`，源码是单引号 `('127.0.0.1', 8090)`，一条都没替换却只 warn。后果是换端口部署后两个页签全 502 且日志无报错 → 改 python 正则 `subn` + 断言命中 1 处 + 回读 grep，替换不到 `die`。
+- 新增两条离线自测钉住部署脚本：`deploy/selftest-render.sh`（假 site.env 渲染三个 unit + 改端口，16 项断言，全过）、`deploy/selftest-run.sh`（起两个假上游真跑，验 `/model/`、`/operator/` 路由与 404，5 项全过）。两者都在 `/tmp` + 28078/28090/28080 上跑，不装 unit、不重启服务。
+- **从 GitHub 全新 clone 到 `/tmp/vfinal` 后实测**（在 172.16.111.102 上）：`shell` 42 passed + 3 subtests（4.39s）；`operator/backend` collected 571、rc=0；`model-platform/app.py` AST OK；6 个部署脚本 `bash -n` 全过。
+- 说明：`v0.1.0` tag 被移动过两次。仓库 10:05 才建、期间无他人 clone，不构成对外历史改写；CHANGELOG 里记了修正内容。
