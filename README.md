@@ -78,8 +78,8 @@ LEDGER.md               施工台账（含每一次真机验证的原始结论�
 
 ```bash
 # 0. 克隆 + 改唯一一个配置文件
-git clone git@github.com:leafsys1/tk-unified-platform.git
-cd tk-unified-platform
+git clone git@github.com:leafsys1/tk-operator-platform.git
+cd tk-operator-platform
 cp deploy/site.env.example deploy/site.env    # 改里面的 5 处路径/地址
 
 # 1. 算子平台后端（先起，网关依赖它）
@@ -137,15 +137,17 @@ git log --oneline v0.1.0..HEAD        # 相对某个基线改了什么
 git diff v0.1.0 -- shell/gateway.py   # 只看网关改动
 ```
 
-当前基线 `v0.1.0` 的文件指纹（与生产机实测一致，可用于核对是否漂移）：
+当前基线 `v0.1.1` 的文件指纹（与生产机实测一致，可用于核对是否漂移）：
 
 | 文件 | SHA-256 前 16 位 |
 |---|---|
-| `shell/gateway.py` | `f427b024b4a4a9c9` |
+| `shell/gateway.py` | `824ae2f888a0bf71` |
 | `shell/portal.html` | `78fb21207384477d` |
 | `shell/tanku-logo.png` | `cd75e9b829711b8c` |
 | `model-platform/app.py` | `071229de59bf99fc` |
-| `model-platform/static/index.html` | `92d190b4ff58feba` |
+| `model-platform/static/index.html` | `bfce3ced31ca78dc` |
+| `operator/web/dist/index.html` | `4c96ef8a3d56b484` |
+| `operator/web/dist/assets/index-Cy1qBUO3.js` | `23c44e4eb522e614` |
 
 回退、灰度、双跑、数据切换的做法见 `docs/05-operations.md`。
 

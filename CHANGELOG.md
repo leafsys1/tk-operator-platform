@@ -5,6 +5,68 @@
 
 ---
 
+## v0.1.1 — 2026-11-04 — 清掉明暗切换残留 + 模型侧工作区块对齐算子侧 + 仓库改名
+
+**改了什么**
+
+1. **去掉两侧的明暗主题切换（残留功能）**
+   - 模型平台：`model-platform/static/index.html` 删掉 `#theme-btn` 按钮、`applyTheme/initTheme`、
+     `THEME_KEY`（`mb-theme`）持久化与点击监听、`initTheme()` 调用。
+     **注意**：原来没有 localStorage 时会跟随 `prefers-color-scheme`，所以只删按钮不够——
+     不删这段逻辑，系统深色用户仍然会被顶成深色。
+   - 算子平台：`operator/web/src/App.tsx` 删掉 `theme` state、`data-theme` 副作用、右上角「暗/亮」按钮；
+     `operator/web/dist` 用 vite 重新构建（tsc --noEmit 通过，新 `index-Cy1qBUO3.js`，
+     CSS 哈希未变 `index-DHQX1TAc.css`）。前端 `index.html` 本来就静态声明 `data-theme="light"`。
+   - 结果：无论系统是深色还是浏览器里残留旧偏好，两个页面都固定浅色（Playwright 用
+     `color_scheme='dark'` 上下文实测：`dark_class=false`、`theme_attr=light`、无任何切换按钮）。
+
+2. **模型平台左侧「默认工作空间」区块改成算子侧「📁 CANN 算子开发」同款**（网关注入 CSS，未改业务源码）
+   - 原来：36px 渐变方块头像「M」+ 两行文字（默认工作空间 / 小模型迁移计划），透明底。
+   - 现在：单行 `📁 默认工作空间 ▾`，`height:36px`、`border:1px solid #e5e3ef`、`border-radius:13px`、
+     `background:rgba(251,250,255,.91)`、`box-shadow:0 10px 30px rgba(20,26,46,.09)`、
+     文字 14px/400、副标题隐藏、头像隐藏、chevron 14px 右对齐。
+   - 实测与算子侧卡片逐项一致（36px 高 / 13px 圆角 / 同边框同底色同阴影 / 同字号字重）。
+   - 过程中踩到一个坑：CSS 里写 `content:"\1F4C1"` 被 Python 当成八进制转义，
+     发到页面变成 `\u0001F4C1`（控制字符 + 字面量），图标不显示。改成**直接写 📁 字面量**。
+
+3. **仓库改名** `tk-unified-platform` → **`tk-operator-platform`**
+   （GitHub 旧地址自动 301 重定向；README/LEDGER 里的 clone 地址已同步）
+
+4. **补上 `operator/web/dist/`（v0.1.0 的实际缺陷）**
+   v0.1.0 的 README/`.gitignore` 写着「dist 故意入库」，但首次同步时用了
+   `--exclude='dist'`，**实际没进库**。后果很严重：`deploy/setup-operator.sh` 用
+   `rsync --delete` 同步 `operator/web/`，仓库里没有 dist 就会把线上正常的 dist **删掉**，
+   算子前端直接 404。本次把构建产物入库（`index-Cy1qBUO3.js` / `index-DHQX1TAc.css` / `index.html`），
+   README 指纹表同步更新到 v0.1.1。
+
+5. **文档修订**
+   - `docs/01-architecture.md` 新增 §4.3：没有 agent 的模型平台**未知模型完整链路**（9 步）+
+     `npu_shim.py` 7 条规则补丁清单 + 与算子平台的优劣对比。
+   - `docs/04-known-issues.md` 第 2 条按实物证据**改写结论**：OBS 上传其实成功了
+     （`obsutil ls -s` 实测 758.46MB 对象存在、`weights_image.json` `ok:true`），
+     平台记的"未完成"是超时记账错误；补上两层根因与正确修法。
+
+**影响面**
+
+- 需要重启：`tk-gateway-preview`（CSS 注入变了）。算子平台**前端资源**换了一个 js 文件，
+  无需重启后端（静态文件按请求读盘）。模型平台只换了 `static/index.html`，同样无需重启。
+- 数据/数据库：无变化，不涉及 migration。
+- 回退：
+  - 网关 `bash deploy/rollback.sh gateway`
+  - 算子前端 `cp -a app/web/dist.bak-before-notheme-<ts> app/web/dist`
+  - 模型页面 `cp -a static/index.html.bak-before-notheme-<ts> static/index.html`
+
+**验证**
+
+- 网关 `43 passed, 3 subtests passed`（新增 2 个契约测试：工作区块对齐、两侧不得再有明暗切换）
+- 浏览器（1600×1000，`color_scheme='dark'`）：两侧 `toggles.found=[]`、`dark_class=false`、
+  `page_errors=[]`、无 `http>=400`
+- 工作区块实测：`box 177×36`、`radius 13px`、`border 1px rgb(229,227,239)`、
+  `bg rgba(251,250,255,.91)`、`shadow rgba(20,26,46,.09) 0 10px 30px`、`fs 14px/400`、
+  `avatar_display=none`、`small_display=none`、`icon_content="📁"`
+
+---
+
 ## v0.1.0 — 2026-11-04 — 首个可复现基线
 
 融合系统首次入库：1 个外壳 + 2 个平台 + 算力机侧探针，附部署/运维/验证文档。

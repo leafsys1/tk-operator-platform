@@ -34,50 +34,46 @@
 
 ---
 
-## 2. 【高·外部】模型平台上传 OBS 走死掉的代理隧道
+## 2. 【高·外部+平台自身记账】模型平台的权重镜像上传：真的成功了，但平台记成"未完成"
 
-**现象**：`deliver` 阶段卡在「构建模型权重镜像并上传 OBS…」，事件长时间不推进，
-`obssdk.log` 反复重试。
+**现象**：`deliver` 阶段「构建模型权重镜像并上传 OBS…」卡住，事件不推进；一小时后平台写
+`warn 权重镜像未完成（算力服务器命令超时（3600s））`，然后继续生成交付包。
 
-**实测证据**：
+**实测真相（2026-11-04 复核）**——三份证据互相矛盾，以实物为准：
 
-```
-$ tail /root/.obsutil_log/obssdk.log
-Failed to send request with reason: Put "https://61.241.77.58:443/model-corpus/images%2Fweights%
-2Fqwen__qwen2.5-0.5b-instruct.tar.gz?partNumber=5&uploadId=..." :
-  use of closed network connection and will try again
-  ... EOF and will try again
-  ... context deadline exceeded and will try again
+| 证据 | 内容 |
+|---|---|
+| 平台事件流 | `15:08:34 deliver warn 权重镜像未完成（算力服务器命令超时（3600s））` |
+| 算力机 `weights_image.json` | `ok: true, size_mb: 759, obs: obs://model-corpus/images/weights/qwen__qwen2.5-0.5b-instruct.tar.gz, ts: 2026-11-03T15:27:14+0800` |
+| **OBS 实物**（`obsutil ls -s`） | `Total size of prefix ... is: 758.46MB, File number: 1` ← **对象确实存在** |
 
-$ curl -x http://127.0.0.1:17891 http://example.com
-curl: (28) Operation timed out after 5000 milliseconds with 0 bytes received
-```
+**根因（两层，都已实测）**：
 
-**根因（已证实）**：算力机 root 的环境里有 `HTTPS_PROXY=http://127.0.0.1:17891`，
-这个本地端口是**别人**（`codex` 进程）起的 sshd 动态转发隧道，隧道已死。
-`obsutil` 走代理 → 代理不通 → 上传永远重试。
+1. **上传慢/卡的直接原因**：算力机 root 的 `HTTPS_PROXY=http://127.0.0.1:17891` 是别人
+   （codex 进程）起的 sshd 动态转发隧道。上传期间隧道断过，
+   `obssdk.log` 反复 `use of closed network connection` / `EOF` / `context deadline exceeded`，
+   obsutil 一直重试（multipart 分片上传，5 片）。隧道恢复后上传在 `15:27:14` 完成。
+2. **平台记错的机制原因**：平台用 `npu(..., 3600)` 跑远端命令，**超时只杀掉本地 SSH 子进程，
+   不会杀远端 `mk_image.sh`**。远端脚本继续跑完并写了 `weights_image.json`，
+   而平台的事件流永远停在"超时 warn"，交付包在 `15:12` 就已生成（早于上传真正完成 15 分钟）。
 
-**对照证据（关键）**：同日 07:20 同一模型、同一路径成功过
-（`权重镜像：OK 759 MB`、`交付包已生成（10 个文件）`），说明配置没错，是隧道在那之后挂的。
+**影响**：不是功能缺失，是**状态口径不可信**。看到 `warn 权重镜像未完成` 不代表没上传成功，
+必须去算力机读 `_probe/<模型>/weights_image.json` 并用 `obsutil ls` 核对象是否存在。
+反过来更危险：交付包可能在哪天真的没上传成功时也照样生成（因为只看事件流）。
 
-**影响**：模型平台上"权重镜像上传 + OBS 归档"这一步不可用；镜像本地构建、性能测试、
-`probe.json`、配方归档**都正常**。不阻塞 `docs/03-verification.md` 里已列的其他能力。
+**现在怎么绕**：判据固定成三步——① 平台事件流 ② 算力机 `weights_image.json` 的 `ok` ③
+`obsutil ls -s <obs 路径>` 拿到的字节数。三者一致才算交付完成。
 
-**现在怎么绕**：
-1. 平台自身会在 `npu(timeout=3600)` 到点后降级为 `warn` 并继续生成交付包——
-   **不要在超时前手工 kill，会丢掉交付包**。
-2. 真要上传，让隧道主人在算力机上重连隧道，或者让 `obsutil` 绕过代理：
+**正确修法**（未做）：
 
-```bash
-# 只在确认不走代理也能到 OBS 时这么做
-env -u HTTPS_PROXY -u https_proxy -u ALL_PROXY -u all_proxy \
-  obsutil cp /tmp/_imgone/<x>.tar.gz obs://model-corpus/images/weights/<x>.tar.gz
-```
+- `mk_image.sh` 里对 `obsutil cp` 显式 `env -u HTTPS_PROXY -u https_proxy -u ALL_PROXY -u all_proxy`
+  （或走内网 endpoint 直连），不要继承别人的临时隧道；
+- 平台侧把「上传」做成可查询的独立状态（读 `weights_image.json` 而不是靠退出码），
+  超时后继续轮询该文件，别把 warn 写死；
+- 给 `npu()` 的远端命令加真正的远端超时与清理（`timeout` 包一层 + 结束后 `pkill -f mk_image`），
+  否则超时后远端还在跑，既不受控又会被记账成失败。
 
-**正确修法**：`mk_image.sh` 里不要继承 `HTTPS_PROXY`，显式 `env -u`；或把隧道纳入
-systemd 管理（`ClientAliveInterval` + 自动重连），别让别人的临时进程承载生产依赖。
-
-**注意**：这条隧道被别人的进程共用。**不要自己去 kill 或重启别人的进程**，报告给对应的人。
+**注意**：那条隧道被别人的进程共用。**不要 kill 或重启别人的进程**，报告给对应的人。
 
 ---
 

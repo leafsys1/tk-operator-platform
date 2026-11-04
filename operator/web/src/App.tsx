@@ -44,7 +44,7 @@ const findImage = (list: HostImage[], id: number | null | undefined): HostImage 
 export default function App() {
   const [view, setView] = useState<View>("tasks");
   const [taskId, setTaskId] = useState<number | null>(null);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  // 深浅色切换已移除：平台固定浅色，不再保留 theme 状态。
   const [err, setErr] = useState<string | null>(null);
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -182,10 +182,6 @@ export default function App() {
     if (hostId === defaultHostId) setProjectImages(next);
     if (hostId === projectHostId) setProjectHostImages(next);
   };
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
 
   // 首屏把服务器与项目拉一次（侧栏页脚要显示执行机）
   useEffect(() => {
@@ -613,9 +609,6 @@ export default function App() {
                 删除任务
               </button>
             )}
-            <button className="btn" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
-              {theme === "light" ? "暗" : "亮"}
-            </button>
             {view === "hosts" && (
               <button className="btn btn-primary" onClick={doProbe} disabled={busy}>
                 {busy ? "探针中…" : "重新探针"}

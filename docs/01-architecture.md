@@ -136,6 +136,61 @@ dsh 版本有个坑：`dsh` 是指向 `studio-dsh-launch.sh` 的软链，脚本�
 `argparse json os re sqlite3 subprocess threading time uuid http.server urllib.parse`。
 没有 `requests`/`httpx`/`urllib.request`，**物理上无法发任何 HTTP 请求**。
 
+### 4.3 没有 agent，未知模型是怎么迁移的（完整链路）
+
+没有任何"模型自己思考"的环节，全部是**规则 + 配方复用 + 经验库检索 + 远端真跑**：
+
+```
+① find_corpus_dir(model)        语料库有没有这个模型？目录名把 / 换成 __ 匹配
+   ├─ 有 → 直接用
+   └─ 没有 ↓
+② guess_category(model)         按名字关键词归类（nlp / cv / audio / multi-modal / scientific）
+   + download_model()           在算力机上 modelscope.snapshot_download 到 /tmp/ms_dl
+                                · 同模型加互斥，避免 N 份并发下载抢带宽
+                                · 并行查体积，超过 MAX_MODEL_GB(512GB) 立刻 kill
+                                · 归位到 /data/model_corpus/<cat>/<org__name>/
+③ load_recipes()                查有没有"已验证配方"
+                                来源：_probe/<模型>/recipe.json（优先）或 probe.json，
+                                只要 loaded=true 就算配方命中
+   ├─ 命中 → fast route：直接复用上次的加载路线/依赖/耗时，跳过画像
+   └─ 未命中 ↓
+④ profile_model(mdir)           本地画像：文件数、有哪些标准 config、arch、权重文件数
+   （只是数文件和读 config.json，不是模型推理）
+⑤ wait_for_card()               排队抢卡（进程内 _CARD_BUSY + npu-smi 探空闲）
+⑥ 远端 probe.sh → probe_model.py 在算力机容器里**真加载 + 真推理**
+   · probe_model.py 会 import npu_shim 打 7 条兼容补丁（见下）
+   · 输出里出现 VERDICT=LOAD-OK 才算过
+⑦ 远端日志用 STAGE_RULES 正则映射成阶段事件 → 这就是页面上"看起来像 agent"的进度
+⑧ 失败时：classify_error() 分桶 + diagnose(err) 在 41 条坑库里按关键词打分取 top2
+⑨ 成功时：perf.sh 测 P50/P95/P99 → mk_image.sh 造权重镜像传 OBS → make_delivery 出交付包
+          → 配方归档，**下次同模型就走 fast route**
+```
+
+**"自动适配"到底自动在哪**：`compute-side/_probe/npu_shim.py` 里有 **7 条规则补丁**，
+每条都对应一个实测踩过的坑，带现象/根因/影响面的注释：
+
+| # | 补丁 | 治什么 |
+|---|---|---|
+| P1 | `modelscope.verify_device` 接受 npu | 白名单写死 cpu/cuda/gpu，传 npu 直接 assert |
+| P2 | `torch.cuda.*` 重定向到 npu | 模型代码硬编码 `.cuda()` |
+| P3 | 屏蔽 `npu-smi` 缺失告警 | 容器里没 npu-smi 会刷屏 |
+| P4 | transformers 远程代码免交互 | 卡在 `Do you wish to run the custom code? [y/N]` 被答 N |
+| P5 | 补齐旧模型缺的 `all_tied_weights_keys` | 新版 transformers 属性缺失 |
+| P6 | 补齐 config 缺的生成参数默认值 | `forced_bos_token_id` 等 AttributeError |
+| P7 | 补齐 torchaudio 被移除的旧 API | 旧音频模型 import 失败 |
+
+超出这 7 条的坑，平台**不会自己修**：它把 `datasets`/桶位/坑库建议推给你，
+由人改配置或改代码，修好之后把结论回写 `adaptations.json` / `pitfalls.json`——
+下次遇到同类就能自动命中。所以它的"经验增长"是**人写进去的**，不是模型学出来的。
+
+**这套东西的好处与代价**（和算子平台对比时最有意义）：
+
+| | 好处 | 代价 |
+|---|---|---|
+| 规则 + 配方 | 同样输入必得同样结果，可审计、可复现、零 token 成本 | 遇到 7 条补丁覆盖不到的新坑就停住，等人介入 |
+| 坑库关键词打分 | 命中即给现成根因与处置方向，比人翻日志快 | 只能匹配"见过的现象"，同义不同词的报错会漏 |
+| 远端真跑 | 判据是真实 LOAD-OK / 真推理，不是猜测 | 每个模型都要占一张卡，慢；没法像 LLM 那样"先推理再试" |
+
 ## 5. 算力机侧布局
 
 ```

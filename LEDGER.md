@@ -164,7 +164,7 @@
 
 ## 代码入库与版本管理（2026-11-04 10:0x-10:40）
 
-- 仓库：`git@github.com:leafsys1/tk-unified-platform.git`（**private**，owner leafsys1），默认分支 `main`，基线 tag `v0.1.0`。
+- 仓库：`git@github.com:leafsys1/tk-operator-platform.git`（**private**，owner leafsys1），默认分支 `main`，基线 tag `v0.1.0`。
 - 入库内容（500+ 文件 / 13MB）：`shell/`（网关+页面+Logo+42 单测）、`operator/`（backend 143 个 .py、web 源码+dist、workspaces/cann-ops 工作区模板、ops/scripts/docs/config）、`model-platform/`（app.py 1432 行 + static + start.sh）、`compute-side/_probe/`（11 个探针脚本）、`deploy/`（site.env 单一配置 + 3 个 setup + verify + rollback + 脱敏扫描 + 2 个自测）、`docs/`（架构/部署/验证/已知问题/运维 5 篇 + 索引）、`tools/`（17 个 Playwright 与 NPU 判别脚本）、`LEDGER.md`。
 - **不入库**：所有密钥/私钥/`access.txt`/`site.env`、`runs/`、`archives/`、`reports/`、`node_modules`、`control-venv312`、`build/`、`.dsh/`/`.opx-chat/` 会话目录、`*.db`。脱敏扫描 `deploy/scan_secrets.py` 对 500 文件通过（测试夹具里的假私钥/假口令已人工核对后按路径豁免）。
 - 三次修正（都是自测发现，不是推测）：
@@ -174,3 +174,16 @@
 - 新增两条离线自测钉住部署脚本：`deploy/selftest-render.sh`（假 site.env 渲染三个 unit + 改端口，16 项断言，全过）、`deploy/selftest-run.sh`（起两个假上游真跑，验 `/model/`、`/operator/` 路由与 404，5 项全过）。两者都在 `/tmp` + 28078/28090/28080 上跑，不装 unit、不重启服务。
 - **从 GitHub 全新 clone 到 `/tmp/vfinal` 后实测**（在 172.16.111.102 上）：`shell` 42 passed + 3 subtests（4.39s）；`operator/backend` collected 571、rc=0；`model-platform/app.py` AST OK；6 个部署脚本 `bash -n` 全过。
 - 说明：`v0.1.0` tag 被移动过两次。仓库 10:05 才建、期间无他人 clone，不构成对外历史改写；CHANGELOG 里记了修正内容。
+
+## 明暗切换残留清理 + 工作区块对齐 + 仓库改名（2026-11-04 10:5x-11:2x）
+
+- **去掉明暗切换**：模型平台 `static/index.html` 删 `#theme-btn` 按钮 / `applyTheme` / `initTheme` / `THEME_KEY('mb-theme')` / 点击监听 / 启动调用；算子平台 `web/src/App.tsx` 删 `theme` state、`data-theme` 副作用与右上角「暗/亮」按钮，**用 vite 重新构建 dist**（`npm ci` 183 包 13s、`npm run build` 7.5s，含 `tsc --noEmit`；新 `index-Cy1qBUO3.js`，CSS 哈希未变 `index-DHQX1TAc.css`）。
+  - 关键点：模型平台原来在没有 localStorage 时**跟随 `prefers-color-scheme`**，只删按钮不删逻辑，系统深色用户仍会被顶成深色。
+  - 实测（Playwright，`color_scheme='dark'` 上下文）：两侧 `toggles.found=[]`、`body.dark=false`、算子 `data-theme=light`、`page_errors=[]`。
+- **模型侧工作区块改成算子侧同款**（网关注入 CSS，业务源码未改）：原来「M 渐变方块 + 两行文字」→ 现在单行 `📁 默认工作空间 ▾`，`177×36`、`radius 13px`、`border 1px rgb(229,227,239)`、`bg rgba(251,250,255,.91)`、`shadow rgba(20,26,46,.09) 0 10px 30px`、`fs 14px/400`、`avatar/small 均 display:none`、chevron 14px。与算子侧 `div.card`（178×36，同半径/同边框/同底色/同阴影/同字号）逐项一致。
+  - 踩坑 1：CSS 里写 `content:"\1F4C1"` 被 Python 解析成八进制转义 → 页面收到控制字符 `\u0001F4C1`，图标不显示；改成直接写 📁 字面量。
+  - 踩坑 2：`.workspace-select{font-size:14px}` 压不过 `THEME_CSS` 里 `body [class] button[class]{font-size:13px}`（(0,2,2) > (0,2,0)），容器字号仍是 13px；用 `#workspace-btn{font-size:14px!important}` 解决。
+  - 踩坑 3：`workspace-wrap` 原有 2px 左右外边距导致宽度 173 vs 算子 178；改为 `margin:0 0 14px` 后 177（1px 亚像素差，视觉一致）。
+- **仓库改名**：`tk-unified-platform` → `tk-operator-platform`（`gh repo rename`，旧地址自动 301；本地 remote、README、LEDGER 已同步）。
+- **发现并修复 v0.1.0 的一个真实缺陷**：`operator/web/dist/` 当时被 `--exclude='dist'` 排除，**从未入库**，而 `setup-operator.sh` 用 `rsync --delete` 同步 `operator/web/` —— 新机器按 README 部署会把前端 dist 同步成空目录，页面直接 404。本次把构建产物入库并更新 README 指纹表。
+- 验证：网关单测 `43 passed, 3 subtests`（新增 2 条契约：工作区块对齐算子卡片、两侧不得再有明暗切换）；部署侧回读 `sha256(gateway)=824ae2f8…`、`sha256(model index.html)=bfce3ced…` 与仓库一致。

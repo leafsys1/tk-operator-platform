@@ -114,8 +114,7 @@
           <svg class="icon sm" aria-hidden="true"><use href="#i-search"/></svg>
           <span>搜索模型与任务…</span><kbd>⌘ K</kbd>
         </button>
-        <button class="header-icon" id="theme-btn" title="切换深浅色主题" aria-label="切换深浅色主题">
-          <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg></button>
+        <!-- 深浅色切换已移除：本工作台统一浅色主题，不再提供主题切换入口 -->
         <div class="profile" title="默认工作空间" aria-hidden="true">MB</div>
       </div>
     </header>
@@ -1343,20 +1342,9 @@
     }
   }
 
-  /* ========== 主题 / 移动端导航 ========== */
-  const THEME_KEY = 'mb-theme';
-  function applyTheme(dark) {
-    document.body.classList.toggle('dark', !!dark);
-    $('theme-btn').innerHTML = ico(dark ? 'sun' : 'moon');
-    try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
-  }
-  function initTheme() {
-    let saved = null;
-    try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* ignore */ }
-    const dark = saved ? saved === 'dark'
-      : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    applyTheme(dark);
-  }
+  /* ========== 主题 ==========
+     深浅色切换已移除：工作台固定浅色，不再读写 mb-theme，也不跟随系统深色。
+     保留 applyTheme 为空壳会误导后来的人，所以整段删掉。 */
 
   function toggleWorkspace(open) {
     const btn = $('workspace-btn'), pop = $('workspace-pop');
@@ -1479,12 +1467,6 @@
     if (ev.target === $('detail-modal')) closeDetail();
   });
 
-  $('theme-btn').addEventListener('click', () => {
-    const dark = !document.body.classList.contains('dark');
-    applyTheme(dark);
-    toast(dark ? '已切换深色模式' : '已切换浅色模式');
-  });
-
   $('menu-btn').addEventListener('click', () => {
     const open = !$('sidebar').classList.contains('open');
     $('sidebar').classList.toggle('open', open);
@@ -1538,7 +1520,6 @@
   });
 
   /* ========== 启动 ========== */
-  initTheme();
   renderPipeline();
   renderLogPanel();
   renderStats();

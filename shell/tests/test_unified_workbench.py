@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from _paths import text as _asset_text  # noqa: E402
+from _paths import ROOT, text as _asset_text  # noqa: E402
 
 import gateway
 
@@ -77,12 +77,47 @@ class UnifiedWorkbenchContractTest(unittest.TestCase):
         self.assertIn('.side-link,.side-link span,.sidebar nav button,.sidebar nav button span{font-weight:400!important}', css)
         self.assertIn('.side-link.active,.side-link.active span{font-weight:400!important}', css)
 
-    def test_model_workspace_block_uses_operator_brand_style(self):
-        self.assertIn('.workspace-select{display:flex!important', GATEWAY)
-        self.assertIn('border:0!important;border-radius:9px!important;background:transparent!important', GATEWAY)
-        self.assertIn('.ws-avatar{width:26px!important', GATEWAY)
-        self.assertIn('background:linear-gradient(135deg,#6557d2,#38bdf8)!important', GATEWAY)
-        self.assertIn('.workspace-select .txt b{font-size:15px!important;font-weight:650!important', GATEWAY)
+    def test_model_workspace_block_matches_operator_cann_card(self):
+        """模型侧左上角工作区块要和算子侧「📁 CANN 算子开发」卡片同款：
+        36px 高、13px 圆角、1px 描边、半透明底、同款阴影、单行 14px/400 文字、
+        前置文件夹图标、右侧色弱 chevron。原来的「M 渐变方块 + 两行文字」已废弃。"""
+        self.assertIn('.workspace-select.workspace-select{display:flex!important', GATEWAY)
+        self.assertIn('height:36px!important', GATEWAY)
+        self.assertIn('border:1px solid #e5e3ef!important;border-radius:13px!important', GATEWAY)
+        self.assertIn('background:rgba(251,250,255,.91)!important', GATEWAY)
+        self.assertIn('box-shadow:0 10px 30px rgba(20,26,46,.09)!important', GATEWAY)
+        # 图标换成文件夹（CSS 转义 U+1F4C1），M 渐变方块隐藏
+        self.assertIn('.ws-avatar{display:none!important}', GATEWAY)
+        self.assertIn('content:"\U0001F4C1"', GATEWAY)
+        # 单行 14px/400，副标题隐藏
+        self.assertIn('.workspace-select .txt b{display:block!important;font-size:14px!important;font-weight:400!important', GATEWAY)
+        # 卡片要和算子侧同宽同高：sidebar 内边距 11px、workspace-wrap 不再额外缩进
+        self.assertIn('.workspace-wrap{margin:0 0 14px!important}', GATEWAY)
+        self.assertIn('.workspace-select .txt small{display:none!important}', GATEWAY)
+        # 不再出现旧的渐变头像与两行布局
+        self.assertNotIn('linear-gradient(135deg,#6557d2,#38bdf8)!important', GATEWAY)
+        self.assertNotIn('.workspace-select .txt b{font-size:15px!important', GATEWAY)
+
+    def test_no_light_dark_toggle_left_in_either_product(self):
+        """明暗切换是残留功能。两侧源码里都不许再有切换入口，
+        也不许再读写主题持久化（否则删了按钮仍可能被系统深色顶起来）。"""
+        repo = ROOT.parent
+        if not (repo / 'operator/web/src/App.tsx').is_file():
+            raise unittest.SkipTest('只跑在完整仓库布局下（shell/ + model-platform/ + operator/ 同级）')
+
+        model_html = (repo / 'model-platform/static/index.html').read_text(encoding='utf-8')
+        self.assertNotIn('id="theme-btn"', model_html)
+        self.assertNotIn('THEME_KEY', model_html)              # 主题持久化常量必须一起删
+        self.assertNotIn('applyTheme(', model_html)
+        self.assertNotIn('initTheme(', model_html)
+        self.assertNotIn('prefers-color-scheme', model_html)
+
+        operator_app = (repo / 'operator/web/src/App.tsx').read_text(encoding='utf-8')
+        self.assertNotIn('setTheme', operator_app)
+        self.assertNotIn('data.theme = theme', operator_app)
+        # 算子前端 index.html 静态声明 light，删掉状态后仍然固定浅色
+        operator_index = (repo / 'operator/web/index.html').read_text(encoding='utf-8')
+        self.assertIn('data-theme="light"', operator_index)
 
 
 if __name__ == '__main__':
