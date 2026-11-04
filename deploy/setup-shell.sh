@@ -34,13 +34,27 @@ install -m 0600 "$REPO_DIR/shell/portal.html"   "$SHELL_ROOT/portal.html"   || d
 install -m 0644 "$REPO_DIR/shell/tanku-logo.png" "$SHELL_ROOT/tanku-logo.png" || die "拷 logo 失败"
 ok "gateway-v2.py / portal.html / tanku-logo.png"
 
-# 网关把上游端口写死在代码里，端口不同就必须改
-sed -i -e "s/('model', (\"127.0.0.1\", 8090))/('model', ('127.0.0.1', ${MODEL_PORT}))/" \
-       -e "s/('operator', (\"127.0.0.1\", 18078))/('operator', ('127.0.0.1', ${OPERATOR_PORT}))/" \
-       "$SHELL_ROOT/gateway-v2.py"
-grep -q "127.0.0.1', ${MODEL_PORT}" "$SHELL_ROOT/gateway-v2.py" \
-  && ok "上游端口已改为 model=$MODEL_PORT operator=$OPERATOR_PORT" \
-  || warn "上游端口改写没命中（gateway.py 里 upstream 写法和预期不同，请手工核对）"
+# 网关把上游端口写死在 main() 里（默认 8090 / 18078），端口不同必须改。
+# 用 python 改而不是 sed：源码里是单引号，sed 里的引号转义很容易写成「静默不生效」。
+python3 - "$SHELL_ROOT/gateway-v2.py" "$MODEL_PORT" "$OPERATOR_PORT" <<'PY' || die "上游端口改写失败"
+import re, sys
+path, mport, oport = sys.argv[1], sys.argv[2], sys.argv[3]
+src = open(path, encoding="utf-8").read()
+pat = re.compile(r"\{'model':\s*\(\s*'127\.0\.0\.1'\s*,\s*\d+\s*\)\s*,\s*"
+                 r"'operator':\s*\(\s*'127\.0\.0\.1'\s*,\s*\d+\s*\)\s*\}")
+new = "{'model': ('127.0.0.1', %s), 'operator': ('127.0.0.1', %s)}" % (mport, oport)
+out, n = pat.subn(new, src)
+if n != 1:
+    sys.exit("找到 %d 处 upstream 声明（期望 1）—— gateway.py 结构变了，请人工核对" % n)
+open(path, "w", encoding="utf-8").write(out)
+print("  上游已改为 model=%s operator=%s" % (mport, oport))
+PY
+# 回读确认（不信 sed/python 的返回值）
+grep -q "'model': ('127.0.0.1', ${MODEL_PORT})" "$SHELL_ROOT/gateway-v2.py" \
+  || die "回读失败：gateway-v2.py 里没有 model 端口 ${MODEL_PORT}"
+grep -q "'operator': ('127.0.0.1', ${OPERATOR_PORT})" "$SHELL_ROOT/gateway-v2.py" \
+  || die "回读失败：gateway-v2.py 里没有 operator 端口 ${OPERATOR_PORT}"
+ok "上游端口回读确认：model=$MODEL_PORT operator=$OPERATOR_PORT"
 
 # ---------- 3. 离线单测（先测再上）----------
 info "跑外壳单测"

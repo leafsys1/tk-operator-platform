@@ -107,6 +107,25 @@ bash deploy/verify.sh
 | `deploy/verify.sh` | 进程/端口/回环/壳页/缓存头/两侧 API/端点探测 | FAIL 非零退出 |
 | `deploy/rollback.sh` | 回退任意组件 | 回退后自动 curl 验证 |
 | `deploy/scan_secrets.py` | 提交前脱敏扫描 | 有敏感内容非零退出 |
+| `deploy/selftest-render.sh` | 用假 site.env 渲染三个 unit，检查路径/端口/用户是否都被正确替换 | 有任何一项没替换就失败 |
+| `deploy/selftest-run.sh` | 全程 28078/28090/28080 + /tmp，起两个假上游实际验路由 | 路由错就失败 |
+
+### 1.3 部署脚本本身怎么验的（不碰生产）
+
+改端口是最容易「静默失败」的一步（网关上游端口写死在代码里）。所以有两条离线自测：
+
+```bash
+bash deploy/selftest-render.sh   # 渲染三个 unit + 改端口，逐项断言 16 项
+bash deploy/selftest-run.sh      # 起假上游真跑一遍，验 /model/ 与 /operator/ 路由
+```
+
+两条都在 `/tmp` 与 28078/28090/28080 上跑，**不安装 unit、不重启任何服务、不碰生产端口**。
+实测结果：render 16 项全过；run 5 项全过（`/model/api/x` → model 上游且前缀被剥掉、
+`/operator/api/y` → operator 上游、`/` 返回壳页、未知路径 404）。
+
+> 踩过的坑：最初用 `sed` 改 `("127.0.0.1", 8090)`，而源码里其实是**单引号**
+> `('127.0.0.1', 8090)`，sed 一条都没替换成功却只打了 warning。现在改成
+> python 正则 + `subn` 计数 + 回读 grep 双重确认，替换不到就 `die`。
 
 ## 版本与回退
 
