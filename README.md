@@ -1,177 +1,176 @@
-# 天宽科技 · 算力调优工具链
+<p align="center">
+  <img src="shell/tanku-logo.png" alt="天宽科技" width="180">
+</p>
 
-两个产品共用一个 Web 入口的融合部署：一个统一外壳（shell）反向代理两套独立平台，
-业务功能各自保留，视觉与导航在壳层统一。
+<h1 align="center">算力调优工具链</h1>
 
-```
-                    ┌──────────────────────────────────────────────┐
-   浏览器 ──────────▶│  shell / gateway      0.0.0.0:18080          │
-   (内网)            │  ├─ GET /            → portal.html（双 iframe 壳）│
-                    │  ├─ /brand/tanku.png → 公司 Logo              │
-                    │  ├─ /operator/*      → 127.0.0.1:18078       │
-                    │  └─ /model/*         → 127.0.0.1:8090        │
-                    └───────────────┬──────────────┬───────────────┘
-                                    │              │
-                    ┌───────────────▼───┐   ┌──────▼────────────────┐
-                    │ 算子开发平台        │   │ 模型迁移工作台          │
-                    │ FastAPI 18078      │   │ http.server 8090       │
-                    │ agent = dsh        │   │ 无 LLM，确定性流水线     │
-                    └────────┬───────────┘   └──────┬────────────────┘
-                             │  SSH 派发             │  SSH 派发
-                             └──────────┬───────────┘
-                                        ▼
-                       算力服务器 昇腾 910B ×8
-                       /data/lfx/op-agent      ← 算子容器任务 + 共享设备锁
-                       /data/model_corpus      ← 模型权重 + 探针脚本
-```
+<p align="center">
+  统一模型迁移适配与算子开发，在一个 Web 入口完成任务编排、昇腾 NPU 真机验证与证据交付。
+</p>
 
-## 三个组件的本质差别（先看这个再看代码）
+<p align="center">
+  <a href="https://github.com/leafsys1/tk-operator-platform/tags"><img src="https://img.shields.io/github/v/tag/leafsys1/tk-operator-platform?style=flat-square&sort=semver&label=release" alt="Release"></a>
+  <a href="operator/backend/pyproject.toml"><img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.12+"></a>
+  <a href="operator/web/package.json"><img src="https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react&logoColor=white" alt="React 19"></a>
+  <a href="docs/03-verification.md"><img src="https://img.shields.io/badge/Ascend-910B-CB0000?style=flat-square" alt="Ascend 910B"></a>
+</p>
 
-| | 算子开发平台 | 模型迁移工作台 | shell |
-|---|---|---|---|
-| 语言/框架 | Python FastAPI + React | 纯 Python `http.server` | 纯 Python `http.server` |
-| 有 agent 吗 | **有**，`@deepseek-ai/dsh` 0.2.0-rc.2 | **有**，自研 `agent_bridge.py`（只在需要时介入） | 没有 |
-| 大模型 | `deepseek-v4.1-flash-1017`（天宽网关） | 同一个模型、同一个网关 | 不调用 |
-| "智能"从哪来 | 真 LLM + 工具调用 + 技能 | 复现包回放（0 次 LLM）+ 失败时 Agent 介入 + 坑库检索 | — |
-| 端口 | 127.0.0.1:18078 | 127.0.0.1:8090 | 0.0.0.0:18080 |
+<p align="center">
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#系统架构">系统架构</a> ·
+  <a href="#验证与验收">验证与验收</a> ·
+  <a href="#文档导航">文档导航</a> ·
+  <a href="CHANGELOG.md">版本记录</a>
+</p>
 
-> 模型迁移平台现在是**两条路线**：模型曾经跑通且环境指纹没变 → 回放复现包，
-> 一次 LLM 都不调；从没跑通 / 回放失败 → Agent 读证据、改入口、容器里验算、复跑，
-> 跑通后把新入口和指纹沉淀成下一次的复现包。判据只认容器打印的 `VERDICT=LOAD-OK`，
-> agent 自述成功不算数。详见 `docs/06-agent-design.md`。
+---
 
-## 目录结构
+## 平台概览
 
-```
-shell/                  统一外壳（网关 + 页面 + 测试 + systemd 单元）
-  gateway.py            ★ 全部路由/主题注入/写闸/缓存控制都在这里
-  portal.html           双 iframe 壳（64px 页签轨 + 118×29 Logo）
-  tanku-logo.png        公司 Logo（180×44 RGBA 源图，显示 118×29）
-  tests/                42 项单元测试
-  deploy/               tk-gateway-preview.service
+算力调优工具链把两个原本独立的工作台收口到统一入口，并将 Web 服务与算力执行环境分离：通算机负责任务编排、状态展示和证据管理，算力服务器通过 SSH 接收任务并在昇腾 NPU 上执行验证。
 
-operator/               算子开发平台（同事产品，此处为可复现快照）
-  backend/              FastAPI 后端（143 个 .py）
-  web/                  React 前端源码（30 个 ts/tsx）+ dist 构建产物
-  workspaces/cann-ops/  算子工作区模板（脚本 + 用例 + 判据 + 5 个算子实现）
-  ops/                  nm.conf（容器启动参数）、dsh patch、workspace 模板
-  scripts/              nm_test.sh（远端执行总入口）、cannbot 等
-  docs/                 平台自身设计文档（gate-report-v1、impl-contract-v2 等）
-  config/               docker-18.09-default.json（seccomp profile）
-  deploy/               systemd 单元 + 环境变量模板
+| 组件 | 定位 | 关键能力 |
+|---|---|---|
+| **算子开发平台** | 面向 CANN 算子的开发与调优工作台 | 需求澄清、用例管理、编译、正确性测试、性能分析与交付归档 |
+| **模型迁移工作台** | 面向模型 NPU 适配的迁移流水线 | 复现包回放、环境指纹比对、有界 Agent 介入、平台复验与适配沉淀 |
+| **统一外壳** | 两个平台的单一 Web 入口 | 子路径反向代理、统一视觉、来源与 Host 限制、读写闸控制 |
 
-model-platform/         模型迁移工作台（同事产品，此处为可复现快照）
-  app.py                单文件后端，1432 行，仅 stdlib
-  static/               单页前端
-  start.sh              启停脚本
-  deploy/               systemd 单元 + 看门狗
+### 核心设计
 
-compute-side/_probe/    算力机侧探针脚本（probe.sh / mk_image.sh / npu_shim.py …）
+- **复现优先**：模型命中配方且环境指纹一致时直接回放，不调用 LLM。
+- **有界介入**：无配方、环境漂移或回放失败时，Agent 在受限工具集和轮数上限内完成适配。
+- **平台复验**：Agent 的自述不作为成功依据；模型必须由平台再次执行，并输出 `VERDICT=LOAD-OK`。
+- **真机取证**：算子编译、正确性、性能与模型加载结果均保留可追溯证据。
+- **可部署、可回退**：三个组件独立部署，仓库提供环境渲染、验收与按组件回退脚本。
 
-tools/                  端到端验证脚本（Playwright UI 驱动 + NPU 真伪判别）
-docs/                   部署、回滚、复现、已知问题
-LEDGER.md               施工台账（含每一次真机验证的原始结论）
+## 系统架构
+
+```mermaid
+flowchart LR
+    U[浏览器] --> G[统一外壳<br/>Gateway]
+
+    subgraph H[通算机]
+        G --> O[算子开发平台<br/>FastAPI + React]
+        G --> M[模型迁移工作台]
+        M --> D{路线判定}
+        D -->|配方与环境一致| R[复现包回放<br/>0 次 LLM]
+        D -->|无配方 / 漂移 / 回放失败| A[Agent 适配<br/>有界循环]
+    end
+
+    O -->|SSH 派发| N[算力服务器<br/>Ascend 910B]
+    R -->|SSH 派发| N
+    A -->|受限工具执行| N
+    N --> E[日志、指标与交付证据]
+    E --> O
+    E --> M
 ```
 
-## 快速开始（在一台全新的等价服务器上）
+统一外壳是唯一对外监听的服务；两个业务平台默认只监听回环地址。完整的进程、路由与安全边界见[架构与边界](docs/01-architecture.md)。
 
-前提：Ubuntu 22.04+、Python 3.12、能 SSH 到算力机、算力机上已装 Ascend 驱动与 CANN。
+## 快速开始
+
+### 环境要求
+
+- Ubuntu 22.04 或更高版本
+- Python 3.12
+- 可通过 SSH 访问算力服务器
+- 算力服务器已安装 Ascend 驱动与 CANN，且 `npu-smi info` 可正常识别设备
+
+### 部署
 
 ```bash
-# 0. 克隆 + 改唯一一个配置文件
-git clone git@github.com:leafsys1/tk-operator-platform.git
+git clone https://github.com/leafsys1/tk-operator-platform.git
 cd tk-operator-platform
-cp deploy/site.env.example deploy/site.env    # 改里面的 5 处路径/地址
 
-# 1. 算子平台后端（先起，网关依赖它）
+cp deploy/site.env.example deploy/site.env
+vi deploy/site.env
+
 bash deploy/setup-operator.sh
-
-# 2. 模型迁移平台
 bash deploy/setup-model-platform.sh
-
-# 3. 统一外壳
 bash deploy/setup-shell.sh
-
-# 4. 验收（不 PASS 不要交付）
 bash deploy/verify.sh
 ```
 
-每个脚本都会自检前置条件、跑对应单测、装 systemd unit、回读健康检查；
-`verify.sh` 给一张 `PASS/FAIL/SKIP` 汇总表，明细落 `/tmp/tk-verify-*.log`。
-详见 `docs/02-deploy.md`。
+部署参数统一写在 `deploy/site.env`。请按目标环境设置安装目录、端口、算力服务器连接信息和访问白名单，不要直接复用示例中的现场值。部署脚本按“算子平台 → 模型平台 → 统一外壳”的顺序执行；`verify.sh` 出现 `FAIL` 时不应交付。
 
-| 脚本 | 干什么 | 失败时会怎样 |
-|---|---|---|
-| `deploy/setup-operator.sh` | venv + 34 项锁版依赖 + 后端 571 tests + alembic + unit | 测试不过直接退出，**不启动服务** |
-| `deploy/setup-model-platform.sh` | 同步 app.py/static + 推探针到算力机 + unit | 探针推送失败会告警（任务会在远端失败） |
-| `deploy/setup-shell.sh` | 装网关/页面/Logo + 改上游端口 + **42 项单测** + 端到端冒烟 | 单测不过直接退出 |
-| `deploy/verify.sh` | 进程/端口/回环/壳页/缓存头/两侧 API/端点探测 | FAIL 非零退出 |
-| `deploy/rollback.sh` | 回退任意组件 | 回退后自动 curl 验证 |
-| `deploy/scan_secrets.py` | 提交前脱敏扫描 | 有敏感内容非零退出 |
-| `docs/testcases/` | 对外测试用例（v0.1.3 合并版 docx）+ 逐条实测记录 + 合并说明 |
-| `deploy/selftest-render.sh` | 用假 site.env 渲染三个 unit，检查路径/端口/用户是否都被正确替换 | 有任何一项没替换就失败 |
-| `deploy/selftest-run.sh` | 全程 28078/28090/28080 + /tmp，起两个假上游实际验路由 | 路由错就失败 |
+详细前置条件、反向代理和数据迁移说明见[部署指南](docs/02-deploy.md)。
 
-### 1.3 部署脚本本身怎么验的（不碰生产）
+## 典型工作流
 
-改端口是最容易「静默失败」的一步（网关上游端口写死在代码里）。所以有两条离线自测：
+### 算子开发
+
+1. 在工作台创建算子任务并确认规格与用例。
+2. 通过受控执行链在算力服务器完成编译、冒烟、正确性和基准测试。
+3. 汇总性能指标、运行日志与交付清单。
+4. 生成带校验信息的交付包，保留全过程证据。
+
+### 模型迁移
+
+1. 解析模型并匹配历史复现包。
+2. 比较环境指纹，选择 `replay` 或 `agent` 路线。
+3. 在 NPU 环境完成加载与前向验证；失败时读取证据并受限修正入口。
+4. 由平台独立复验成功结果，归档入口、配方、环境指纹和审计记录。
+
+Agent 的工具边界、成功判据和实测案例见[Agent 介入层设计](docs/06-agent-design.md)。
+
+## 验证与验收
+
+### 离线回归
 
 ```bash
-bash deploy/selftest-render.sh   # 渲染三个 unit + 改端口，逐项断言 16 项
-bash deploy/selftest-run.sh      # 起假上游真跑一遍，验 /model/ 与 /operator/ 路由
+# 模型迁移：路线判定、动作解析、沙箱边界与循环上限
+python3 -m unittest discover -s model-platform/tests -v
+
+# 统一外壳：路由、安全边界、缓存与视觉契约
+python3 -m pytest shell/tests -q
+
+# 部署模板与脚本自检（在目标 Ubuntu 环境执行）
+bash deploy/selftest-render.sh
+bash deploy/selftest-run.sh
 ```
 
-两条都在 `/tmp` 与 28078/28090/28080 上跑，**不安装 unit、不重启任何服务、不碰生产端口**。
-实测结果：render 16 项全过；run 5 项全过（`/model/api/x` → model 上游且前缀被剥掉、
-`/operator/api/y` → operator 上游、`/` 返回壳页、未知路径 404）。
+### 部署验收
 
-> 踩过的坑：最初用 `sed` 改 `("127.0.0.1", 8090)`，而源码里其实是**单引号**
-> `('127.0.0.1', 8090)`，sed 一条都没替换成功却只打了 warning。现在改成
-> python 正则 + `subn` 计数 + 回读 grep 双重确认，替换不到就 `die`。
+```bash
+bash deploy/verify.sh           # 只读验收
+bash deploy/verify.sh --write   # 增加写链路验收
+bash deploy/verify.sh --gpu     # 增加设备状态检查
+```
+
+`verify.sh` 会检查进程、端口、回环监听、统一入口、缓存头、两侧 API 和端点状态，并以 `PASS / FAIL / SKIP` 汇总。真机验证记录及未覆盖项见[验证证据](docs/03-verification.md)。
+
+## 仓库结构
+
+| 路径 | 内容 |
+|---|---|
+| [`shell/`](shell/) | 统一入口、反向代理、品牌资源与网关测试 |
+| [`operator/`](operator/) | 算子平台的 FastAPI 后端、React 前端和算子工作区 |
+| [`model-platform/`](model-platform/) | 模型迁移服务、静态页面、Agent 桥接层与离线测试 |
+| [`compute-side/`](compute-side/) | 算力服务器侧的探针、兼容层与受限执行脚本 |
+| [`deploy/`](deploy/) | 环境模板、安装、验收、自检和回退脚本 |
+| [`docs/`](docs/) | 架构、部署、验证、问题清单、运维和 Agent 设计文档 |
+| [`tools/`](tools/) | 真机验证与证据辅助工具 |
+
+## 安全边界
+
+> [!WARNING]
+> 当前交付形态面向受控内网环境，不应直接暴露到公网。仓库基线中的网关服务单元默认关闭认证、允许写操作，并使用较宽的 Host 配置。正式部署前必须启用认证、收紧 `ALLOWED_CIDRS` 与 `ALLOWED_HOSTS`，并按需开启两侧只读闸。
+
+模型名会进入远端执行链，现阶段只应接收可信输入。完整风险、临时规避方式和待修项见[已知问题](docs/04-known-issues.md)。
+
+## 文档导航
+
+| 文档 | 用途 |
+|---|---|
+| [架构与边界](docs/01-architecture.md) | 组件关系、进程、路由、执行链与资源隔离 |
+| [部署指南](docs/02-deploy.md) | 环境配置、安装顺序、反向代理与迁移 |
+| [验证证据](docs/03-verification.md) | 已验证结果、成功判据和未覆盖范围 |
+| [已知问题](docs/04-known-issues.md) | 当前风险、影响、规避方式与修复状态 |
+| [运维与回退](docs/05-operations.md) | 日常排查、升级、备份和组件回退 |
+| [Agent 介入层设计](docs/06-agent-design.md) | 路线判定、工具白名单、复验与审计机制 |
+| [变更记录](CHANGELOG.md) | 版本行为变化与回退点 |
+| [项目账本](LEDGER.md) | 仓库基线、交付事实与历史决策 |
 
 ## 版本与回退
 
-本仓库**就是回退基线**。每个可上线状态打一个 `v*` tag：
-
-```bash
-git tag -l
-git log --oneline v0.1.0..HEAD        # 相对某个基线改了什么
-git diff v0.1.0 -- shell/gateway.py   # 只看网关改动
-```
-
-当前基线 `v0.1.6` 的文件指纹（与生产机实测一致，可用于核对是否漂移）：
-
-| 文件 | SHA-256 前 16 位 |
-|---|---|
-| `shell/gateway.py` | `d358897b5921527e` |
-| `shell/portal.html` | `78fb21207384477d` |
-| `shell/tanku-logo.png` | `cd75e9b829711b8c` |
-| `model-platform/app.py` | `26c3dbfcd0e2ffdd`（2149 行） |
-| `model-platform/agent_bridge.py` | `6ab4d173c2bd90a1`（392 行，新增） |
-| `model-platform/static/index.html` | `f724cb7368266d87` |
-| `model-platform/start.sh` | `stop` 支持按端口反查（见 known-issues 2.6.4） |
-| `compute-side/_probe/probe.sh` | 入口 `--out` 两种约定自适应（见 known-issues 2.6.3） |
-| `compute-side/_probe/agent_exec.sh` | 新增，agent 的 `run_py` 入口 |
-| `operator/web/dist/index.html` | `29ed7c4b516735b0` |
-| `operator/web/dist/assets/index-kcZUWMFK.js` | 构建产物，随 dist 一起核对 |
-
-回退、灰度、双跑、数据切换的做法见 `docs/05-operations.md`。
-
-## 克隆下来就能验（实测）
-
-在一台干净目录里 clone 之后直接跑（不需要先部署）：
-
-```bash
-cd shell && python3 -m pytest tests -q        # 42 passed, 3 subtests (4.4s)
-cd ../operator/backend && python -m pytest -q # 571 collected, rc=0
-cd ../model-platform && python3 -m unittest discover -s tests -v   # 32 passed（Agent 层/路线判定/沙箱边界）
-python3 -c "import ast;ast.parse(open('../model-platform/app.py').read())"   # OK, 2149 行
-```
-
-需要在算力机上跑测试时，用 `control-venv312` 里的解释器（它带齐了 pytest 与后端依赖）。
-
-## 重要：这不是生产级安全配置
-
-基线里 `WORKBENCH_AUTH_REQUIRED=0`、`PREVIEW_GATE=0`、两侧都**可匿名写**，只靠来源网段
-`172.16.111.0/24` 兜底。上公网前必须做鉴权（反代 + 域名 + 证书），见 `docs/04-known-issues.md`
-的「上线前必做」清单。仓库里**不含**任何密钥、私钥、密码。
+当前稳定标签为 [`v0.1.6`](https://github.com/leafsys1/tk-operator-platform/releases/tag/v0.1.6)。升级前应先完成离线回归，部署后必须运行 `deploy/verify.sh`；未通过验收时可使用 `deploy/rollback.sh` 按组件回退。数据库与运行数据不在脚本的自动回退范围内，变更前请按[运维文档](docs/05-operations.md)完成备份。
